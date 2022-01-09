@@ -3,7 +3,7 @@ requests
 numpy
 matplotlib
 nltk
-gensim>=4
 scikit-learn>=1
 tensorflow>=2
 tensorboard
+transformers
