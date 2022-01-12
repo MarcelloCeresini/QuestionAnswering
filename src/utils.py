@@ -112,13 +112,11 @@ def compute_predictions(dataset, model):
         question_ids = [x.decode('utf-8') for x in sample[1].numpy()]
         input_ids = features["input_ids"]
 
-        for i in range(len(sample)):
+        for i in range(len(input_ids)):
             one_sample_input_ids = input_ids[i]
             one_sample_question_id = question_ids[i]
             one_sample_predicted_limits = predicted_limits[i]
 
             predictions[one_sample_question_id] = tokenizer.decode(one_sample_input_ids[one_sample_predicted_limits[0]:one_sample_predicted_limits[1]+1], skip_special_tokens=True)
-        
-        break
     
-    return(predictions)
+    return predictions

@@ -5,7 +5,7 @@ from typing import Dict
 
 import utils
 
-BATCH_SIZE = 32
+BATCH_SIZE = 64
 
 def read_question_set(path_to_json:str) -> Dict:
     with open(path_to_json, 'r') as f:
@@ -28,7 +28,6 @@ if __name__ == '__main__':
     BEST_WEIGHTS_PATH = "../data/training/training_normal/cp-0005.ckpt" ######################################### TODO: actually add the path
     model.load_weights(BEST_WEIGHTS_PATH)
     predictions = utils.compute_predictions(dataset, model)
-    print(predictions)
     PATH_TO_PREDICTIONS_JSON = "predictions.json"
     with open(PATH_TO_PREDICTIONS_JSON, 'w') as f:
         json.dump(predictions, f)
