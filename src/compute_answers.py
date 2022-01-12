@@ -21,16 +21,11 @@ if __name__ == '__main__':
     # COMPUTE PREDICTIONS
     # FORMAT AND SAVE PREDICTION FILE
     dataset, ids = utils.create_data_for_dataset_predictions(data)
-    model = utils.config.create_model_one_layer()
-    BEST_WEIGHTS_PATH = "some_path" ######################################### TODO: actually add the path
+    model = utils.config.create_standard_model([3, 4, 5, 6])
+    BEST_WEIGHTS_PATH = "training_normal/cp-0005.ckpt" ######################################### TODO: actually add the path
     model.load_weights(BEST_WEIGHTS_PATH)
     predictions = utils.compute_predictions(dataset, ids, model)
 
     PATH_TO_PREDICTIONS_JSON = "predictions.json"
     with open(PATH_TO_PREDICTIONS_JSON, 'w') as f:
         json.dump(predictions, f)
-
-
-
-
-
