@@ -75,7 +75,7 @@ def find_start_end_token_one_hot_encoded(
 
 def create_dataset_and_ids(
         data: Dict,
-        config: Config, 
+        config: Config,
         return_labels:bool=False,
         return_NER_attention:bool=False
     ) -> Tuple[tf.data.Dataset, List[str]]:
@@ -88,25 +88,27 @@ def create_dataset_and_ids(
         - config: `Constants` - The configuration object containing the tokenizer
         - return_labels: `bool` - Whether labels are needed or not. For example,
             when testing the model we might not have labels in the dataset.
+        - return_NER_attention: `bool` - Whether to also create and return a NER
+            attention vector (TODO)
 
     Outputs:
         - dataset: `tf.data.Dataset` --> the data structure containing 
-            (features, labels) that will be fed to the model during fitting
-            more specifically:
+            (features, labels, ids) that will be fed to the model during fitting.
+            More specifically:
             - features: `Dict` --> keys:
                 - input_ids: array of token ids
                 - attention_mask: array indicating if the corresponding 
                     token is padding or not
                 - NER_attention (optional, flag `return_NER_attention`): 
                     array containing the NER attention weights (TODO)
-             - labels: `Dict` --> keys:
+            - ids: List[str] --> The list of IDs of questions in the dataset.
+            - labels: (optional) `Dict` --> keys:
                 - gt_S: array representing the index of the initial token 
                     of the answer, one-hot encoded
                 - gt_E: array representing the index of the final token 
                     of the answer, one-hot encoded
-        - ids: List[str] --> The list of IDs of questions in the dataset.
 
-    This function, for each artiscle in "data", extracts all paragraphs 
+    This function, for each article in "data", extracts all paragraphs 
     (and their text, the "context"), and for each paragraph, all 
     questions_and_answers.
     At this point, it tokenizes (question+context) while truncating and 
@@ -170,17 +172,18 @@ def create_dataset_and_ids(
                 features.append(encoded_inputs)
                 ids.append(question_and_answer["id"])
 
-    print("Creating dataset")
     if return_labels:
         dataset = tf.data.Dataset.from_tensor_slices((
-            pd.DataFrame.from_dict(features).to_dict(orient="list"),  # dataframe for features 
-            pd.DataFrame.from_dict(labels).to_dict(orient="list")     # dataframe for labels 
+            pd.DataFrame.from_dict(features).to_dict(orient="list"),  # Dataframe for features 
+            ids,                                                      # Question IDs
+            pd.DataFrame.from_dict(labels).to_dict(orient="list"),    # Dataframe for labels 
         ))
     else:
-        dataset = tf.data.Dataset.from_tensor_slices(
-            pd.DataFrame.from_dict(features).to_dict(orient="list")
-        )
-    return (dataset, ids)
+        dataset = tf.data.Dataset.from_tensor_slices((
+            pd.DataFrame.from_dict(features).to_dict(orient="list"),  # Dataframe for features
+            ids                                                       # Question IDs
+        ))
+    return dataset
 
 
 def start_end_token_from_probabilities(
@@ -217,17 +220,21 @@ def start_end_token_from_probabilities(
     return idxs
 
 
-def random_baseline_predict():
-    raise NotImplementedError
+def random_baseline_predict(batch_size:int=64, dim:int=512):
+    '''
+    Creates random prediction vectors.
+    '''
+    pstartv = np.random.random((batch_size, dim))
+    pendv = np.random.random((batch_size, dim))
+    return pstartv, pendv
 
 
-def compute_predictions(dataset: tf.data.Dataset, 
-                        ids: List[str], 
+def compute_predictions(dataset: tf.data.Dataset,
                         config: Config,
                         model: keras.Model=None,
                         mode='predict'):
     '''
-    Computes predictions given the dataset, the list of IDs, the 
+    Computes predictions given the dataset, the 
     used configuration parameters and optionally a model.
 
     `mode` can be one of `predict`, `baseline_random`. When using
@@ -235,13 +242,15 @@ def compute_predictions(dataset: tf.data.Dataset,
     predictions (can be None) and can therefore be omitted.
     '''
     predictions = {}
-    for sample, id in dataset.take(len(dataset)), ids:
-        input_ids = sample["input_ids"]
+    for sample in tqdm(dataset):
+        features = sample[0]
         if mode == 'predict':
             assert model is not None, "Model is None, cannot use mode 'predict'"
-            pstartv, pendv = model.predict(sample)
+            pstartv, pendv = model.predict(features)
         elif mode == 'baseline_random':
-            pstartv, pendv = random_baseline_predict()
+            pstartv, pendv = random_baseline_predict(
+                config.BATCH_SIZE, config.INPUT_LEN
+            )
         else:
             raise NotImplementedError
         # Obtain the limits from the probabilities
@@ -249,8 +258,18 @@ def compute_predictions(dataset: tf.data.Dataset,
             pstartv, pendv
         )
         # Decode the answer's tokens
-        predictions[id] = config.tokenizer.decode(
-            input_ids[predicted_limits[0]:predicted_limits[1]+1], 
-            skip_special_tokens=True
-        )
+        question_ids = [x.decode('utf-8') for x in sample[1].numpy()]
+        input_ids = features["input_ids"]
+
+        for i in range(len(input_ids)):
+            one_sample_input_ids = input_ids[i]
+            one_sample_question_id = question_ids[i]
+            one_sample_predicted_limits = predicted_limits[i]
+
+            predictions[one_sample_question_id] = config.tokenizer.decode(
+                one_sample_input_ids[
+                    one_sample_predicted_limits[0]:one_sample_predicted_limits[1]+1
+                ], skip_special_tokens=True
+            )
+    
     return predictions
