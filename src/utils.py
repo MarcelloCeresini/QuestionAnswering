@@ -77,8 +77,8 @@ def create_data_for_dataset_predictions(data):
                 features.append(encoded_inputs)
                 ids.append(question_and_answer["id"])
 
-    return (
-        tf.data.Dataset.from_tensor_slices(pd.DataFrame.from_dict(features).to_dict(orient="list")), 
+    return tf.data.Dataset.from_tensor_slices(
+        pd.DataFrame.from_dict(features).to_dict(orient="list"),
         ids
     )
 
@@ -102,9 +102,11 @@ def start_end_token_from_probabilities(pstartv: np.array,
     return idxs
 
 
-def compute_predictions(dataset, ids, model):
+def compute_predictions(dataset, model):
     predictions = {}
-    for sample, id in dataset, ids:
-        input_ids = sample["input_ids"]
-        predicted_limits = start_end_token_from_probabilities(*model.predict(sample))
+    for sample in dataset:
+        features = sample[0]
+        id = sample[1]
+        input_ids = features["input_ids"]
+        predicted_limits = start_end_token_from_probabilities(*model.predict(features))
         predictions[id] = tokenizer.decode(input_ids[predicted_limits[0]:predicted_limits[1]+1], skip_special_tokens=True)
