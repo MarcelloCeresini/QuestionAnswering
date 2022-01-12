@@ -22,7 +22,7 @@ if __name__ == '__main__':
     # FORMAT AND SAVE PREDICTION FILE
     dataset, ids = utils.create_data_for_dataset_predictions(data)
     model = utils.config.create_standard_model([3, 4, 5, 6])
-    BEST_WEIGHTS_PATH = "training_normal/cp-0005.ckpt" ######################################### TODO: actually add the path
+    BEST_WEIGHTS_PATH = "../data/training/training_normal/cp-0005.ckpt" ######################################### TODO: actually add the path
     model.load_weights(BEST_WEIGHTS_PATH)
     predictions = utils.compute_predictions(dataset, ids, model)
 

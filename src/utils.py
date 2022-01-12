@@ -104,7 +104,7 @@ def start_end_token_from_probabilities(pstartv: np.array,
 
 def compute_predictions(dataset, ids, model):
     predictions = {}
-    for sample, id in dataset.take(len(dataset)), ids:
+    for sample, id in dataset, ids:
         input_ids = sample["input_ids"]
         predicted_limits = start_end_token_from_probabilities(*model.predict(sample))
         predictions[id] = tokenizer.decode(input_ids[predicted_limits[0]:predicted_limits[1]+1], skip_special_tokens=True)
