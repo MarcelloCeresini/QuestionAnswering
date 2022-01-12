@@ -125,11 +125,11 @@ def read_dataset_from_disk(filename):
                 tf.io.parse_tensor(still_serialized_example["attention_mask"], tf.int32)
             ),
             (
-                tf.io.parse_tensor(still_serialized_example["out_S"], tf.int32),
-                tf.io.parse_tensor(still_serialized_example["out_E"], tf.int32)
+                tf.io.parse_tensor(still_serialized_example["out_S"], tf.float64),
+                tf.io.parse_tensor(still_serialized_example["out_E"], tf.float64)
             )
         )
-
+        
     parsed_dataset = raw_dataset.map(_parse_function)
 
 
@@ -211,7 +211,6 @@ def create_dataset_and_ids(
                 )
 
                 if return_labels:
-                    print("in")
                     ### MAPPING OF THE START OF THE ANSWER BETWEEN CHARS AND TOKENS ###
                     # We want to pass from the starting position in chars to the starting position in tokens
                     label = find_start_end_token_one_hot_encoded(
@@ -237,7 +236,7 @@ def create_dataset_and_ids(
     if return_labels:
         dataset = tf.data.Dataset.from_tensor_slices((
             pd.DataFrame.from_dict(features).to_dict(orient="list"),  # Dataframe for features 
-            ids,                                                      # Question IDs
+            # ids,                                                      # Question IDs
             pd.DataFrame.from_dict(labels).to_dict(orient="list"),    # Dataframe for labels 
         ))
     else:
