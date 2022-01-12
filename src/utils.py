@@ -75,12 +75,13 @@ def create_data_for_dataset_predictions(data):
                 encoded_inputs.pop("offset_mapping", None) # Removes the offset mapping, not useful anymore 
                                                            # ("None" is used because otherwise KeyError could be raised if the key wasn't present)
                 features.append(encoded_inputs)
+
                 ids.append(question_and_answer["id"])
 
-    return tf.data.Dataset.from_tensor_slices(
+    return tf.data.Dataset.from_tensor_slices((
         pd.DataFrame.from_dict(features).to_dict(orient="list"),
         ids
-    )
+    ))
 
 
 def start_end_token_from_probabilities(pstartv: np.array, 
@@ -106,7 +107,7 @@ def compute_predictions(dataset, model):
     predictions = {}
     for sample in dataset:
         features = sample[0]
-        id = sample[1]
+        id = sample[1].numpy().decode('utf-8')
         input_ids = features["input_ids"]
         predicted_limits = start_end_token_from_probabilities(*model.predict(features))
         predictions[id] = tokenizer.decode(input_ids[predicted_limits[0]:predicted_limits[1]+1], skip_special_tokens=True)
