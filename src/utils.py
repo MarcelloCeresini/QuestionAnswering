@@ -25,7 +25,7 @@ config = ConfigFile()
 
 tokenizer = config.tokenizer
 
-def create_data_for_dataset_predictions(data):
+def create_data_for_dataset_predictions(data, BATCH_SIZE):
     '''
     This function takes in input the whole data structure and iteratively composes question+context pairs, plus their label
     Inputs:
@@ -81,7 +81,7 @@ def create_data_for_dataset_predictions(data):
     return tf.data.Dataset.from_tensor_slices((
         pd.DataFrame.from_dict(features).to_dict(orient="list"),
         ids
-    ))
+    )).batch(BATCH_SIZE)
 
 
 def start_end_token_from_probabilities(pstartv: np.array, 
@@ -93,7 +93,7 @@ def start_end_token_from_probabilities(pstartv: np.array,
     idxs = []
     for i in range(pstartv.shape[0]):
         pstart = np.stack([pstartv[i,:]]*dim, axis=1)
-        pend = np.stack([pendv[i,:]]*dim, axis=0)
+        pend = np.stack([pendv[i,:]]*dim, axis=1)
         sums = pstart + pend
         sums = np.triu(sums, k=1) # Zero out lower triangular matrix + diagonal
         val = np.argmax(sums)
@@ -105,9 +105,20 @@ def start_end_token_from_probabilities(pstartv: np.array,
 
 def compute_predictions(dataset, model):
     predictions = {}
-    for sample in dataset:
+    for sample in tqdm(dataset):
         features = sample[0]
-        id = sample[1].numpy().decode('utf-8')
-        input_ids = features["input_ids"]
         predicted_limits = start_end_token_from_probabilities(*model.predict(features))
-        predictions[id] = tokenizer.decode(input_ids[predicted_limits[0]:predicted_limits[1]+1], skip_special_tokens=True)
+
+        question_ids = [x.decode('utf-8') for x in sample[1].numpy()]
+        input_ids = features["input_ids"]
+
+        for i in range(len(sample)):
+            one_sample_input_ids = input_ids[i]
+            one_sample_question_id = question_ids[i]
+            one_sample_predicted_limits = predicted_limits[i]
+
+            predictions[one_sample_question_id] = tokenizer.decode(one_sample_input_ids[one_sample_predicted_limits[0]:one_sample_predicted_limits[1]+1], skip_special_tokens=True)
+        
+        break
+    
+    return(predictions)
