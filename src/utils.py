@@ -1,3 +1,4 @@
+from tensorflow._api.v2 import data
 from tqdm import tqdm
 from typing import List, Dict, Tuple
 import json
@@ -71,6 +72,66 @@ def find_start_end_token_one_hot_encoded(
                 # After this cycle, we must check other answers
                 break
     return result
+
+def tensor_value_serialized(tensor):
+    value = tf.io.serialize_tensor(tensor).numpy()
+    return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+
+
+def serialize_example(input_ids, attention_mask, out_S, out_E):
+
+    feature = {
+        'input_ids' : tensor_value_serialized(input_ids),
+        'attention_mask' : tensor_value_serialized(attention_mask),
+        'out_S' : tensor_value_serialized(out_S),
+        'out_E' : tensor_value_serialized(out_E),
+    }
+
+    example_proto = tf.train.Example(features=tf.train.Features(feature=feature))
+    return example_proto.SerializeToString()
+
+
+def tf_serialize_example(features, labels):
+
+    tf_string = tf.py_function(
+        serialize_example,
+        (features["input_ids"], features["attention_mask"], labels["out_S"], labels["out_E"]),  # Pass these args to the above function.
+        tf.string)      # The return type is `tf.string`.
+
+    return tf.reshape(tf_string, ()) # The result is a scalar.
+
+def write_dataset_on_disk(dataset, filename):
+    serialized_dataset = dataset.map(tf_serialize_example)
+    writer = tf.data.experimental.TFRecordWriter(filename)
+    writer.write(serialized_dataset)
+
+
+def read_dataset_from_disk(filename):
+    filenames = [filename]
+    raw_dataset = tf.data.TFRecordDataset(filenames)
+
+    feature_description = {
+        'input_ids' : tf.io.FixedLenFeature([], tf.string, default_value=''),
+        'attention_mask' : tf.io.FixedLenFeature([], tf.string, default_value=''),
+        'out_S' : tf.io.FixedLenFeature([], tf.string, default_value=''),
+        'out_E' : tf.io.FixedLenFeature([], tf.string, default_value=''),
+    }
+
+    def _parse_function(example_proto):
+        still_serialized_example = tf.io.parse_single_example(example_proto, feature_description)
+        return (
+            (
+                tf.io.parse_tensor(still_serialized_example["input_ids"], tf.int32),
+                tf.io.parse_tensor(still_serialized_example["attention_mask"], tf.int32)
+            ),
+            (
+                tf.io.parse_tensor(still_serialized_example["out_S"], tf.int32),
+                tf.io.parse_tensor(still_serialized_example["out_E"], tf.int32)
+            )
+        )
+
+    parsed_dataset = raw_dataset.map(_parse_function)
+
 
 
 def create_dataset_and_ids(
@@ -150,6 +211,7 @@ def create_dataset_and_ids(
                 )
 
                 if return_labels:
+                    print("in")
                     ### MAPPING OF THE START OF THE ANSWER BETWEEN CHARS AND TOKENS ###
                     # We want to pass from the starting position in chars to the starting position in tokens
                     label = find_start_end_token_one_hot_encoded(
