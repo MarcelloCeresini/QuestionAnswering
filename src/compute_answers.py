@@ -23,8 +23,8 @@ if __name__ == '__main__':
     #   model.load_weights(BEST_WEIGHTS_PATH)
     # Predict the answers to the questions in the dataset
     predictions = utils.compute_predictions(dataset, config, model,
-        mode='baseline_random')
+        mode='predict') # mode='baseline_random' for random baseline
     # Create a prediction file formatted like the one that is expected
-    PATH_TO_PREDICTIONS_JSON = os.path.join('src', 'eval', 'predictions_random.json')
+    PATH_TO_PREDICTIONS_JSON = os.path.join('src', 'eval', 'predictions.json')
     with open(PATH_TO_PREDICTIONS_JSON, 'w') as f:
         json.dump(predictions, f)
