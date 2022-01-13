@@ -12,7 +12,7 @@ if __name__ == '__main__':
     # Read dataset (JSON file)
     data = utils.read_question_set(sys.argv[1])
     # Process questions
-    dataset = utils.create_dataset_and_ids(data, config, return_labels=False)
+    dataset = utils.create_dataset_and_ids(data, config, for_training=False)
     dataset = dataset.batch(config.BATCH_SIZE)
     print("Number of samples: ", len(dataset)*config.BATCH_SIZE)
     # Load model

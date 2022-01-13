@@ -1,10 +1,11 @@
-from tqdm import tqdm
 from typing import List, Dict, Tuple
+from tqdm import tqdm
 import json
 import numpy as np
-import pandas as pd
 import tensorflow as tf
 from tensorflow import keras
+from functools import partial
+
 from config import Config
 
 def read_question_set(path_to_json:str) -> Dict:
@@ -73,15 +74,13 @@ def find_start_end_token_one_hot_encoded(
     return result
 
 
-def create_dataset_and_ids(
-        data: Dict,
-        config: Config,
-        return_labels:bool=False,
-        return_NER_attention:bool=False
-    ) -> Tuple[tf.data.Dataset, List[str]]:
+def dataset_generator(data: Dict, config: Config,
+    return_labels:bool=False, return_NER_attention:bool=False,
+    return_question_id:bool=False):
     '''
     This function takes in input the whole data structure and iteratively 
-    composes (question+context) pairs, plus their label
+    yields (question+context) pairs, plus optionally their label and question
+    IDs.
 
     Inputs:
         - data: `Dict` - The data structure containing the data
@@ -90,10 +89,14 @@ def create_dataset_and_ids(
             when testing the model we might not have labels in the dataset.
         - return_NER_attention: `bool` - Whether to also create and return a NER
             attention vector (TODO)
+        - return_question_IDs: `bool` - Whether to return or not the question ID
+
+    Note: all optional return labels are set to False by default
 
     Outputs:
-        - dataset: `tf.data.Dataset` --> the data structure containing 
-            (features, labels, ids) that will be fed to the model during fitting.
+        - dataset: `tf.data.Dataset` --> the data structure containing either
+            (features), (features, ids), (features, labels) or (features, ids, labels)
+            that will be fed to the model during training or evalution.
             More specifically:
             - features: `Dict` --> keys:
                 - input_ids: array of token ids
@@ -119,11 +122,7 @@ def create_dataset_and_ids(
     In the end, it returns a dataset (`tf.data.Dataset`) with the structure 
     (features, labels), to be injected directly in the fit method of the model
     '''
-    features = []
-    labels = []
-    ids = []
-
-    for article in tqdm(data["data"]):
+    for article in data["data"]:
         for paragraph in article["paragraphs"]:
             for question_and_answer in paragraph["qas"]:
                 ### QUESTION AND CONTEXT TOKENIZATION ###
@@ -159,30 +158,109 @@ def create_dataset_and_ids(
                         # And also the inputs offset mapping just recieved from the tokenizer
                         offsets = encoded_inputs["offset_mapping"]
                     )
-                    labels.append(label)
-                
+
                 encoded_inputs.pop("offset_mapping", None) # Removes the offset mapping, not useful anymore 
-                                                           # ("None" is used because otherwise KeyError 
-                                                           # could be raised if the key wasn't present)
+                                                        # ("None" is used because otherwise KeyError 
+                                                        # could be raised if the key wasn't present)
 
                 if return_NER_attention:
                     # TODO: implement a realistic NER attention vector
                     encoded_inputs['NER_attention'] = np.ones(config.INPUT_LEN)
 
-                features.append(encoded_inputs)
-                ids.append(question_and_answer["id"])
+                if return_question_id and return_labels:  
+                    yield dict(encoded_inputs), question_and_answer['id'], {
+                        'out_S': label['out_S'],
+                        'out_E': label['out_E']
+                    }
+                elif return_labels:
+                    yield dict(encoded_inputs), {
+                        'out_S': label['out_S'],
+                        'out_E': label['out_E']
+                    }
+                elif return_question_id:
+                    yield dict(encoded_inputs), question_and_answer['id']
+                else:
+                    yield dict(encoded_inputs)
 
-    if return_labels:
-        dataset = tf.data.Dataset.from_tensor_slices((
-            pd.DataFrame.from_dict(features).to_dict(orient="list"),  # Dataframe for features 
-            ids,                                                      # Question IDs
-            pd.DataFrame.from_dict(labels).to_dict(orient="list"),    # Dataframe for labels 
-        ))
+
+def create_dataset_and_ids(
+        data: Dict,
+        config: Config,
+        for_training: bool=True,
+        use_NER_attention:bool=False
+    ) -> tf.data.Dataset:
+    '''
+    This function is used to create a lightweight TensorFlow Dataset from
+    a data generator which iterates over all questions in the passed dataset.
+
+    Inputs:
+        - data: `Dict` - The data structure containing the data
+        - config: `Constants` - The configuration object containing the tokenizer
+        - for_training: `bool` (default: `True`) - Whether the produced dataset 
+            will be used for training or not. 
+            This changes the output, since a training dataset needs labels and 
+            doesn't need question IDs, while an evaluation dataset needs
+            question IDs and doesn't need labels.
+        - use_NER_attention: `bool` - Whether to return the additional NER_attention
+            tensor feature    
+
+    Outputs:
+        - dataset: `tf.data.Dataset` --> the data structure containing either
+            (features), (features, ids), (features, labels) or (features, ids, labels)
+            that will be fed to the model during training or evalution.
+            More specifically:
+            - features: `Dict` --> keys:
+                - input_ids: array of token ids
+                - attention_mask: array indicating if the corresponding 
+                    token is padding or not
+                - NER_attention (optional, flag `return_NER_attention`): 
+                    array containing the NER attention weights (TODO)
+            - ids: List[str] (optional) --> The list of IDs of questions in the dataset.
+            - labels: (optional) `Dict` --> keys:
+                - gt_S: array representing the index of the initial token 
+                    of the answer, one-hot encoded
+                - gt_E: array representing the index of the final token 
+                    of the answer, one-hot encoded
+
+    Note: to work with the model, the dataset must be batched.
+    '''
+    # Labels are only returned in training, while question IDs only when not training
+    return_labels = for_training
+    return_question_id = not for_training
+
+    # Create expected signature for the generator output
+    features = {
+        'input_ids': tf.TensorSpec(shape=(512,), dtype=tf.int32), 
+        'attention_mask': tf.TensorSpec(shape=(512,), dtype=tf.int32)
+    }
+    if use_NER_attention:
+        features['NER_attention'] = tf.TensorSpec(shape=(512,), dtype=tf.float64)
+    if for_training:
+        # The dataset contains the features and the labels
+        signature = (features, {
+            'out_S': tf.TensorSpec(shape=(512,), dtype=tf.float64), 
+            'out_E': tf.TensorSpec(shape=(512,), dtype=tf.float64)
+        })
     else:
-        dataset = tf.data.Dataset.from_tensor_slices((
-            pd.DataFrame.from_dict(features).to_dict(orient="list"),  # Dataframe for features
-            ids                                                       # Question IDs
-        ))
+        # The dataset contains the features and the question IDs (strings)
+        signature = (features, tf.TensorSpec(shape=(), dtype=tf.string))
+
+    # Instantiates a partial generator
+    data_gen = partial(dataset_generator, data, config, 
+        return_labels=return_labels, 
+        return_question_id=return_question_id,
+        return_NER_attention=use_NER_attention)
+    # Creates the dataset with the computed signature
+    dataset = tf.data.Dataset.from_generator(data_gen,
+        output_signature=signature)
+    # Compute dataset length
+    dataset = dataset.apply(tf.data.experimental.assert_cardinality(len([
+        question_and_answer
+        for article in data["data"]
+        for paragraph in article["paragraphs"]
+        for question_and_answer in paragraph["qas"]
+    ])))
+    # Return the dataset
     return dataset
 
 
