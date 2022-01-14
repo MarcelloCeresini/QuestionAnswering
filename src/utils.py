@@ -119,6 +119,7 @@ def create_NER_attention_vector(context: str,
         # We cycle through all the tokens of the question, until we find (0,0), 
         # which determines the [SEP] token, a special character which indicates 
         # the beginning of the context
+        # OSS: character counts reset at the beginning of the context, restarting from 0
         if offsets[i] == (0,0): 
             # We skip the first and the last tokens, both special tokens
             j = i+1
@@ -126,10 +127,10 @@ def create_NER_attention_vector(context: str,
                 # If there are still named entities to find
                 if NER_index < len(starting_chars):
                     # When we find a match with the starting index, go on to find the end index
-                    if starting_chars[NER_index] == offsets[j][0]:
+                    if starting_chars[NER_index] >= offsets[j][0] and starting_chars[NER_index] < offsets[j][1]:
                         # Put a ner_weight at all indices containing a named entity
                         NER_attention[j] = ne_weight
-                        while ending_chars[NER_index] != offsets[j][1] and j < len(offsets):
+                        while ending_chars[NER_index] > offsets[j][1] and j < len(offsets)-1:
                             j += 1
                             NER_attention[j] = ne_weight
                         NER_index += 1
@@ -229,7 +230,7 @@ def dataset_generator(data: Dict, config: Config,
                     encoded_inputs['NER_attention'] = create_NER_attention_vector(
                         context=paragraph["context"], 
                         offsets=encoded_inputs["offset_mapping"],
-                        spacy_instance=config.spacy_nlp, 
+                        spacy_instance=config.spacy_nlp,
                         config=config, 
                         non_ne_weight=0.8,
                         ne_weight=1.2
