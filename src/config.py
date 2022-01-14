@@ -2,6 +2,7 @@ from transformers import DistilBertTokenizerFast, TFDistilBertModel
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
+import spacy
 
 class Config():
     '''
@@ -26,6 +27,7 @@ class Config():
         self.transformer_model = TFDistilBertModel.from_pretrained( # The instantiation of the transformer model
             self.HuggingFace_import, output_hidden_states = True
         )
+        self.spacy_nlp = spacy.load("en_core_web_sm")
 
     def create_standard_model(self, hidden_state_list=[3,4,5,6]) -> keras.Model:
         '''

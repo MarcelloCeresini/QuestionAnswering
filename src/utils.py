@@ -5,6 +5,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from functools import partial
+import spacy
 
 from config import Config
 
@@ -72,6 +73,69 @@ def find_start_end_token_one_hot_encoded(
                 # After this cycle, we must check other answers
                 break
     return result
+
+
+def create_NER_attention_vector(context: str, 
+    offsets: List[Tuple[int]],
+    spacy_instance: spacy.lang.en.English,
+    config:Config, non_ne_weight:float=0.8,
+    ne_weight:float=1.2):
+    '''
+    Creates a NER_attention vector. 
+    It uses SpaCy for finding named entities in the context. Then it matches the
+    named entities to the tokens produced by BERT's tokenizer.
+    The NER_attention vector is a vector as long as the tokens containing 
+    `non_ner_weight` (default 0.8) for each token that is not a named entity and
+    `ner_weight` (default 1.2) for each token that is a named entity.
+
+    Inputs:
+    - context: `str` - The context where we look for named entities
+    - offsets: `List[Tuple[int]]` - A list keeping track of the character start 
+        and end indexes for each token.
+    - spacy_instance: `spacy.lang.en.English` - An element that converts a text
+        into a document which contains high level information (eg. about named
+        entities)
+    - config: `Config` - The configuration object containing all constants
+    - non_ne_weight: `float` - The weight for non-named entity tokens (default 0.8)  
+    - ne_weight: `float` - The weight for named entity tokens (default 1.2)
+
+    Outputs:
+    - NER_attention: `np.array` - The array of weights for the tokens, where named
+        entity tokens are weighted more than the rest
+    '''
+    # Processes the context 
+    doc = spacy_instance(context)
+
+    # Instantiates the NER attention vector (default weight: 0.8)
+    NER_attention  = np.ones(config.INPUT_LEN) * non_ne_weight
+    # Create lists of starting and ending character indices of named entities
+    starting_chars = [ ent.start_char for ent in doc.ents ]
+    ending_chars   = [ ent.end_char for ent in doc.ents ]
+    
+    # Iterate over the offsets to obtain the NER tokens
+    NER_index = 0
+    # We skip the first token, [CLS], that has (0,0) as a tuple
+    for i in range(1, len(offsets)):
+        # We cycle through all the tokens of the question, until we find (0,0), 
+        # which determines the [SEP] token, a special character which indicates 
+        # the beginning of the context
+        if offsets[i] == (0,0): 
+            # We skip the first and the last tokens, both special tokens
+            j = i+1
+            while j < len(offsets):
+                # If there are still named entities to find
+                if NER_index < len(starting_chars):
+                    # When we find a match with the starting index, go on to find the end index
+                    if starting_chars[NER_index] == offsets[j][0]:
+                        # Put a ner_weight at all indices containing a named entity
+                        NER_attention[j] = ne_weight
+                        while ending_chars[NER_index] != offsets[j][1] and j < len(offsets):
+                            j += 1
+                            NER_attention[j] = ne_weight
+                        NER_index += 1
+                j += 1
+    
+    return NER_attention
 
 
 def dataset_generator(data: Dict, config: Config,
@@ -159,13 +223,21 @@ def dataset_generator(data: Dict, config: Config,
                         offsets = encoded_inputs["offset_mapping"]
                     )
 
-                encoded_inputs.pop("offset_mapping", None) # Removes the offset mapping, not useful anymore 
-                                                        # ("None" is used because otherwise KeyError 
-                                                        # could be raised if the key wasn't present)
 
                 if return_NER_attention:
                     # TODO: implement a realistic NER attention vector
-                    encoded_inputs['NER_attention'] = np.ones(config.INPUT_LEN)
+                    encoded_inputs['NER_attention'] = create_NER_attention_vector(
+                        context=paragraph["context"], 
+                        offsets=encoded_inputs["offset_mapping"],
+                        spacy_instance=config.spacy_nlp, 
+                        config=config, 
+                        non_ne_weight=0.8,
+                        ne_weight=1.2
+                    )
+
+                encoded_inputs.pop("offset_mapping", None) # Removes the offset mapping, not useful anymore 
+                                                        # ("None" is used because otherwise KeyError 
+                                                        # could be raised if the key wasn't present)
 
                 if return_question_id and return_labels:  
                     yield dict(encoded_inputs), question_and_answer['id'], {
