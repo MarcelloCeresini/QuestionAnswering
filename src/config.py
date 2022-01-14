@@ -15,8 +15,8 @@ class Config():
                                     # in the validation set
         self.SMALL_TRAIN_LEN = 20   # Number of articles to use to build the small training set
         self.SMALL_VAL_LEN = 5      # Number of articles to use to build the small validation set
-        self.BATCH_SIZE = 4        # Number of (question+context) pairs fed to the network for training
-        self.VAL_BATCH_SIZE = 4    # number of (question+context) pairs fed to the network for validation
+        self.BATCH_SIZE = 8        # Number of (question+context) pairs fed to the network for training
+        self.VAL_BATCH_SIZE = 8    # number of (question+context) pairs fed to the network for validation
 
         self.HuggingFace_import = 'distilbert-base-uncased'         # Which model to instantiate from HuggingFace
         self.tokenizer = DistilBertTokenizerFast.from_pretrained(   # Instance of the tokenizer
