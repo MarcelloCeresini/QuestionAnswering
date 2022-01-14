@@ -27,6 +27,9 @@ class Config():
         self.transformer_model = TFDistilBertModel.from_pretrained( # The instantiation of the transformer model
             self.HuggingFace_import, output_hidden_states = True
         )
+        # if it doesn't work:
+        # !pip3 install spacy
+        # !python -m spacy download en_core_web_sm
         self.spacy_nlp = spacy.load("en_core_web_sm")
 
     def create_standard_model(self, hidden_state_list=[3,4,5,6]) -> keras.Model:

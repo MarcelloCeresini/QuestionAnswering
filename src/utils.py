@@ -325,7 +325,7 @@ def create_dataset_and_ids(
     # Creates the dataset with the computed signature
     dataset = tf.data.Dataset.from_generator(data_gen,
         output_signature=signature)
-    # Compute dataset length
+    # Compute dataset length, to be used by tensorflow internals
     dataset = dataset.apply(tf.data.experimental.assert_cardinality(len([
         question_and_answer
         for article in data["data"]
