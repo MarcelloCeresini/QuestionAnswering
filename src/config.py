@@ -30,7 +30,9 @@ class Config():
         # if it doesn't work:
         # !pip3 install spacy
         # !python -m spacy download en_core_web_sm
-        self.spacy_nlp = spacy.load("en_core_web_sm")
+
+        #### UNCOMMENT FOR NER
+        # self.spacy_nlp = spacy.load("en_core_web_sm") # NOT NEEDED FOR NORMAL MODEL
 
     def create_standard_model(self, hidden_state_list=[3,4,5,6]) -> keras.Model:
         '''
