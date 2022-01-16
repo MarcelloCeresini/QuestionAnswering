@@ -22,6 +22,4 @@ venv.bak/
 
 # directories
 data/training
-data/serialized_datasets
-data/training_normal
-data/training_NER
+data/full_datasets
