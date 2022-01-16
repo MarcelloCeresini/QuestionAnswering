@@ -237,7 +237,7 @@ def create_full_dataset(data: Dict, config: Config,
                     encoded_inputs['NER_attention'] = create_NER_attention_vector(
                         context=paragraph["context"], 
                         offsets=encoded_inputs["offset_mapping"],
-                        spacy_instance=config.spacy_nlp,
+                        spacy_instance=config.ner_extractor,
                         config=config, 
                         non_ne_weight=0.8,
                         ne_weight=1.2
@@ -362,7 +362,7 @@ def dataset_generator(data: Dict, config: Config,
                     encoded_inputs['NER_attention'] = create_NER_attention_vector(
                         context=paragraph["context"], 
                         offsets=encoded_inputs["offset_mapping"],
-                        spacy_instance=config.spacy_nlp,
+                        spacy_instance=config.ner_extractor,
                         config=config, 
                         non_ne_weight=0.8,
                         ne_weight=1.2

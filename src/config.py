@@ -46,7 +46,7 @@ class Config():
         )
         # if it doesn't work:
         # !python -m spacy download en_core_web_sm
-        self.spacy_nlp = spacy.load("en_core_web_sm")
+        self.ner_extractor = spacy.load("en_core_web_sm", disable=["tok2vec", "tagger", "parser", "attribute_ruler", "lemmatizer"])
 
     def find_root_path(current_path):
         flag_dir = False
