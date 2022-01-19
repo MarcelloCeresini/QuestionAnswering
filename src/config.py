@@ -48,9 +48,9 @@ class Config():
         # !python -m spacy download en_core_web_sm
         self.ner_extractor = spacy.load("en_core_web_sm", disable=["tok2vec", "tagger", "parser", "attribute_ruler", "lemmatizer"])
 
-    def find_root_path(current_path):
+    def find_root_path(self, current_path):
         flag_dir = False
-        for dir in os.path.normpath(current_path).split("/"):
+        for dir in os.path.normpath(current_path).split(os.sep):
             if dir == "QuestionAnswering":
                 flag_dir = True
                 break
