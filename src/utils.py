@@ -141,7 +141,7 @@ def create_NER_attention_vector(context: str,
 
 def create_full_dataset(data: Dict, config: Config,
     return_labels:bool=False, return_NER_attention:bool=False,
-    return_question_id:bool=False):
+    return_question_id:bool=False, NER_value:float=0):
     '''
     This function takes in input the whole data structure and iteratively 
     yields (question+context) pairs, plus optionally their label and question
@@ -155,6 +155,7 @@ def create_full_dataset(data: Dict, config: Config,
         - return_NER_attention: `bool` - Whether to also create and return a NER
             attention vector (TODO)
         - return_question_IDs: `bool` - Whether to return or not the question ID
+        - NER_value: `float` - hyperparameter value for NER attention enhancement
 
     Note: all optional return labels are set to False by default
 
@@ -239,8 +240,8 @@ def create_full_dataset(data: Dict, config: Config,
                         offsets=encoded_inputs["offset_mapping"],
                         spacy_instance=config.spacy_nlp,
                         config=config, 
-                        non_ne_weight=0.8,
-                        ne_weight=1.2
+                        non_ne_weight=1-NER_value,
+                        ne_weight=1+NER_value
                     )
 
                 encoded_inputs.pop("offset_mapping", None) # Removes the offset mapping, not useful anymore 
@@ -273,7 +274,7 @@ def create_full_dataset(data: Dict, config: Config,
 
 def dataset_generator(data: Dict, config: Config,
     return_labels:bool=False, return_NER_attention:bool=False,
-    return_question_id:bool=False):
+    return_question_id:bool=False, NER_value:float=0):
     '''
     This function takes in input the whole data structure and iteratively 
     yields (question+context) pairs, plus optionally their label and question
@@ -287,6 +288,7 @@ def dataset_generator(data: Dict, config: Config,
         - return_NER_attention: `bool` - Whether to also create and return a NER
             attention vector (TODO)
         - return_question_IDs: `bool` - Whether to return or not the question ID
+        - NER_value: `float` - hyperparameter value for NER attention enhancement
 
     Note: all optional return labels are set to False by default
 
@@ -364,8 +366,8 @@ def dataset_generator(data: Dict, config: Config,
                         offsets=encoded_inputs["offset_mapping"],
                         spacy_instance=config.spacy_nlp,
                         config=config, 
-                        non_ne_weight=0.8,
-                        ne_weight=1.2
+                        non_ne_weight=1-NER_value,
+                        ne_weight=1+NER_value
                     )
 
                 encoded_inputs.pop("offset_mapping", None) # Removes the offset mapping, not useful anymore 
@@ -392,7 +394,8 @@ def create_dataset_and_ids(
         data: Dict,
         config: Config,
         for_training: bool=True,
-        use_NER_attention:bool=False
+        use_NER_attention:bool=False,
+        NER_value:float=0
     ) -> tf.data.Dataset:
     '''
     This function is used to create a lightweight TensorFlow Dataset from
@@ -408,6 +411,8 @@ def create_dataset_and_ids(
             question IDs and doesn't need labels.
         - use_NER_attention: `bool` - Whether to return the additional NER_attention
             tensor feature    
+        - NER_value: `float` - hyperparameter value for NER attention enhancement
+
 
     Outputs:
         - dataset: `tf.data.Dataset` --> the data structure containing either
@@ -454,7 +459,8 @@ def create_dataset_and_ids(
     data_gen = partial(dataset_generator, data, config, 
         return_labels=return_labels, 
         return_question_id=return_question_id,
-        return_NER_attention=use_NER_attention)
+        return_NER_attention=use_NER_attention,
+        NER_value=NER_value)
     # Creates the dataset with the computed signature
     dataset = tf.data.Dataset.from_generator(data_gen,
         output_signature=signature)
