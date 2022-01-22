@@ -20,8 +20,8 @@ class Config():
         self.SMALL_TRAIN_LEN = 20   # Number of articles to use to build the small training set
         self.SMALL_VAL_LEN = 5      # Number of articles to use to build the small validation set
         
-        self.BATCH_SIZE = 32        # Number of (question+context) pairs fed to the network for training
-        self.VAL_BATCH_SIZE = 32    # number of (question+context) pairs fed to the network for validation
+        self.BATCH_SIZE = 64        # Number of (question+context) pairs fed to the network for training
+        self.VAL_BATCH_SIZE = 64    # number of (question+context) pairs fed to the network for validation
 
         self.HuggingFace_import = 'distilbert-base-uncased'         # Which model to instantiate from HuggingFace
         self.tokenizer = DistilBertTokenizerFast.from_pretrained(   # Instance of the tokenizer
@@ -41,12 +41,15 @@ class Config():
         self.SAVE_PATH_TRAIN_DS_INFERENCE = os.path.join(self.ROOT_PATH, "data", "full_datasets", "train_ds_inference")         # save paths for complete datasets: train set without NER
         self.SAVE_PATH_VAL_DS_INFERENCE = os.path.join(self.ROOT_PATH, "data", "full_datasets", "val_ds_inference")             # save paths for complete datasets: validation set without NER
 
-        self.transformer_model = TFDistilBertModel.from_pretrained( # The instantiation of the transformer model
-            self.HuggingFace_import, output_hidden_states = True
-        )
         # if it doesn't work:
         # !python -m spacy download en_core_web_sm
-        self.ner_extractor = spacy.load("en_core_web_sm", disable=["tok2vec", "tagger", "parser", "attribute_ruler", "lemmatizer"])
+        self.ner_extractor = spacy.load("en_core_web_sm", disable=["tok2vec", "tagger", 
+            "parser", "attribute_ruler", "lemmatizer"])
+
+    def get_new_distilbert_transformer(self) -> TFDistilBertModel:
+        return TFDistilBertModel.from_pretrained( # The instantiation of the transformer model
+            self.HuggingFace_import, output_hidden_states = True
+        )    
 
     def find_root_path(self, current_path):
         flag_dir = False
@@ -65,7 +68,9 @@ class Config():
     
         return FileNotFoundError("Move inside root directory and then launch the file")
 
-    def create_standard_model(self, hidden_state_list=[3,4,5,6]) -> keras.Model:
+
+    def create_standard_model(self, hidden_state_list=[3,4,5,6],
+        transformer_to_use=None) -> keras.Model:
         '''
         A utility method to create our "standard" model.
 
@@ -84,7 +89,7 @@ class Config():
         )
         # token_type_ids = tf.keras.Input(shape=(SHAPE_ATTENTION_MASK, ), dtype='int32') # uncomment if using BERT
 
-        transformer = self.transformer_model(
+        transformer = self.get_new_distilbert_transformer()(
             {
                 "input_ids": input_ids,
                 "attention_mask": attention_mask,
