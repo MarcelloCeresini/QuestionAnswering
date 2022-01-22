@@ -6,7 +6,6 @@ import pandas as pd
 import tensorflow as tf
 from tensorflow import keras
 from functools import partial
-import spacy
 
 from config import Config
 
@@ -238,7 +237,7 @@ def create_full_dataset(data: Dict, config: Config,
                     encoded_inputs['NER_attention'] = create_NER_attention_vector(
                         context=paragraph["context"], 
                         offsets=encoded_inputs["offset_mapping"],
-                        spacy_instance=config.spacy_nlp,
+                        spacy_instance=config.ner_extractor,
                         config=config, 
                         non_ne_weight=1-NER_value,
                         ne_weight=1+NER_value
@@ -364,7 +363,7 @@ def dataset_generator(data: Dict, config: Config,
                     encoded_inputs['NER_attention'] = create_NER_attention_vector(
                         context=paragraph["context"], 
                         offsets=encoded_inputs["offset_mapping"],
-                        spacy_instance=config.spacy_nlp,
+                        spacy_instance=config.ner_extractor,
                         config=config, 
                         non_ne_weight=1-NER_value,
                         ne_weight=1+NER_value
@@ -509,39 +508,17 @@ def start_end_token_from_probabilities(
     return idxs
 
 
-def random_baseline_predict(batch_size:int=64, dim:int=512):
-    '''
-    Creates random prediction vectors.
-    '''
-    pstartv = np.random.random((batch_size, dim))
-    pendv = np.random.random((batch_size, dim))
-    return pstartv, pendv
-
-
 def compute_predictions(dataset: tf.data.Dataset,
                         config: Config,
-                        model: keras.Model=None,
-                        mode='predict'):
+                        model: keras.Model):
     '''
     Computes predictions given the dataset, the 
-    used configuration parameters and optionally a model.
-
-    `mode` can be one of `predict`, `baseline_random`. When using
-    a baseline mode, the `model` argument will not be used for the
-    predictions (can be None) and can therefore be omitted.
+    used configuration parameters and the model
     '''
     predictions = {}
     for sample in tqdm(dataset):
         features = sample[0]
-        if mode == 'predict':
-            assert model is not None, "Model is None, cannot use mode 'predict'"
-            pstartv, pendv = model.predict(features)
-        elif mode == 'baseline_random':
-            pstartv, pendv = random_baseline_predict(
-                config.BATCH_SIZE, config.INPUT_LEN
-            )
-        else:
-            raise NotImplementedError
+        pstartv, pendv = model.predict(features)
         # Obtain the limits from the probabilities
         predicted_limits = start_end_token_from_probabilities(
             pstartv, pendv
