@@ -20,7 +20,7 @@ if __name__ == '__main__':
     # Read dataset (JSON file)
     data = utils.read_question_set(DATASET_PATH)
     # Process questions
-    dataset = utils.create_dataset_and_ids(data, config, for_training=False)
+    dataset = utils.create_dataset_from_generator(data, config, for_training=False)
     print("Number of samples: ", len(dataset))
     dataset = dataset.batch(config.BATCH_SIZE)
     # Load model

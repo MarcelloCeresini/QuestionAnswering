@@ -1,3 +1,6 @@
+### This file contains utility functions that are used in   ###
+###      all notebooks and scripts of the project.          ###
+
 from typing import List, Dict, Tuple
 from tqdm import tqdm
 import json
@@ -9,16 +12,15 @@ from functools import partial
 
 from config import Config
 
+
 def read_question_set(path_to_json:str) -> Dict:
     '''
-    Reads the dataset's JSON file and returns it as a 
-    Python dictionary
+    Reads the dataset's JSON file and returns it as a Python dictionary
     '''
     with open(path_to_json, 'r') as f:
         questions = json.load(f)
     return questions
 
-    
 def find_start_end_token_one_hot_encoded(
     answers: Dict, 
     offsets: List[Tuple[int]]) -> int:
@@ -128,11 +130,12 @@ def create_NER_attention_vector(context: str,
                 if NER_index < len(starting_chars):
                     # When we find a match with the starting index, go on to find the end index
                     if starting_chars[NER_index] >= offsets[j][0] and starting_chars[NER_index] < offsets[j][1]:
-                        # Put a ner_weight at all indices containing a named entity
+                        # Put a ne_weight at all indices containing a named entity
                         NER_attention[j] = ne_weight
                         while ending_chars[NER_index] > offsets[j][1] and j < len(offsets)-1:
                             j += 1
                             NER_attention[j] = ne_weight
+                        # Update the counter for tagged named entities
                         NER_index += 1
                 j += 1
     
@@ -142,9 +145,9 @@ def create_full_dataset(data: Dict, config: Config,
     return_labels:bool=False, return_NER_attention:bool=False,
     return_question_id:bool=False, NER_value:float=0):
     '''
-    This function takes in input the whole data structure and iteratively 
-    yields (question+context) pairs, plus optionally their label and question
-    IDs.
+    This function takes in input the whole data structure and constructs
+    a full high-level dataset, which produces (question+context) pairs
+    plus optionally their label and question IDs.
 
     Inputs:
         - data: `Dict` - The data structure containing the data
@@ -152,7 +155,7 @@ def create_full_dataset(data: Dict, config: Config,
         - return_labels: `bool` - Whether labels are needed or not. For example,
             when testing the model we might not have labels in the dataset.
         - return_NER_attention: `bool` - Whether to also create and return a NER
-            attention vector (TODO)
+            attention vector
         - return_question_IDs: `bool` - Whether to return or not the question ID
         - NER_value: `float` - hyperparameter value for NER attention enhancement
 
@@ -168,7 +171,7 @@ def create_full_dataset(data: Dict, config: Config,
                 - attention_mask: array indicating if the corresponding 
                     token is padding or not
                 - NER_attention (optional, flag `return_NER_attention`): 
-                    array containing the NER attention weights (TODO)
+                    array containing the NER attention weights
             - ids: List[str] --> The list of IDs of questions in the dataset.
             - labels: (optional) `Dict` --> keys:
                 - gt_S: array representing the index of the initial token 
@@ -186,8 +189,12 @@ def create_full_dataset(data: Dict, config: Config,
 
     In the end, it returns a dataset (`tf.data.Dataset`) with the structure 
     (features, labels), to be injected directly in the fit method of the model
-    '''
 
+    Note: this method can be RAM intensive, because it has to store the entire
+    dataset while producing it. Using `create_dataset_from_generator`, which uses a 
+    Python generator that produces data on-the-fly, is an alternative for low-memory
+    environments.
+    '''
     features = []
     labels = []
     ids = []
@@ -196,9 +203,9 @@ def create_full_dataset(data: Dict, config: Config,
         for paragraph in article["paragraphs"]:
             for question_and_answer in paragraph["qas"]:
                 ### QUESTION AND CONTEXT TOKENIZATION ###
-                # For question answering with BERT we need to encode both 
+                # For question answering with DistilBERT we need to encode both 
                 # question and context, and this is the way in which 
-                # HuggingFace's BertTokenizer does it.
+                # HuggingFace's DistilBertTokenizer does it.
                 # The tokenizer returns a dictionary containing all the information we need
                 encoded_inputs = config.tokenizer(
                     question_and_answer["question"],    # First we pass the question
@@ -233,7 +240,7 @@ def create_full_dataset(data: Dict, config: Config,
 
 
                 if return_NER_attention:
-                    # TODO: implement a realistic NER attention vector
+                    # We call the function that produces NER weights for tokens
                     encoded_inputs['NER_attention'] = create_NER_attention_vector(
                         context=paragraph["context"], 
                         offsets=encoded_inputs["offset_mapping"],
@@ -244,12 +251,13 @@ def create_full_dataset(data: Dict, config: Config,
                     )
 
                 encoded_inputs.pop("offset_mapping", None) # Removes the offset mapping, not useful anymore 
-                                                        # ("None" is used because otherwise KeyError 
-                                                        # could be raised if the key wasn't present)
+                                                           # ("None" is used because otherwise KeyError 
+                                                           # could be raised if the key wasn't present)
 
                 features.append(encoded_inputs)
                 ids.append(question_and_answer['id'])
 
+    # Depending on the flags, we return the kind of Dataset that is requested by the user.
     if return_question_id and return_labels:
         return tf.data.Dataset.from_tensor_slices((
             pd.DataFrame.from_dict(features).to_dict(orient="list"),
@@ -285,7 +293,7 @@ def dataset_generator(data: Dict, config: Config,
         - return_labels: `bool` - Whether labels are needed or not. For example,
             when testing the model we might not have labels in the dataset.
         - return_NER_attention: `bool` - Whether to also create and return a NER
-            attention vector (TODO)
+            attention vector
         - return_question_IDs: `bool` - Whether to return or not the question ID
         - NER_value: `float` - hyperparameter value for NER attention enhancement
 
@@ -301,7 +309,7 @@ def dataset_generator(data: Dict, config: Config,
                 - attention_mask: array indicating if the corresponding 
                     token is padding or not
                 - NER_attention (optional, flag `return_NER_attention`): 
-                    array containing the NER attention weights (TODO)
+                    array containing the NER attention weights
             - ids: List[str] --> The list of IDs of questions in the dataset.
             - labels: (optional) `Dict` --> keys:
                 - gt_S: array representing the index of the initial token 
@@ -389,7 +397,7 @@ def dataset_generator(data: Dict, config: Config,
                     yield dict(encoded_inputs)
 
 
-def create_dataset_and_ids(
+def create_dataset_from_generator(
         data: Dict,
         config: Config,
         for_training: bool=True,
@@ -423,7 +431,7 @@ def create_dataset_and_ids(
                 - attention_mask: array indicating if the corresponding 
                     token is padding or not
                 - NER_attention (optional, flag `return_NER_attention`): 
-                    array containing the NER attention weights (TODO)
+                    array containing the NER attention weights
             - ids: List[str] (optional) --> The list of IDs of questions in the dataset.
             - labels: (optional) `Dict` --> keys:
                 - gt_S: array representing the index of the initial token 
@@ -512,29 +520,38 @@ def compute_predictions(dataset: tf.data.Dataset,
                         config: Config,
                         model: keras.Model):
     '''
-    Computes predictions given the dataset, the 
-    used configuration parameters and the model
+    Computes predictions given the dataset, the used configuration parameters and model
+
+    Inputs:
+    - dataset: a `tf.data.Dataset` on which we will compute predictions.
+    - config: a `Config` element that contains all parameters to be used
+    - model: a `keras.Model` that computes the predictions.
     '''
     predictions = {}
+    # For each sample we can extract from the dataset (it can be a single element or 
+    # a batch)
     for sample in tqdm(dataset):
+        # We let the model predict the probability tensors given the input features
         features = sample[0]
         pstartv, pendv = model.predict(features)
-        # Obtain the limits from the probabilities
+        # We obtain the span from the probabilities
         predicted_limits = start_end_token_from_probabilities(
             pstartv, pendv
         )
-        # Decode the answer's tokens
+        # Then we decode the answer's tokens 
         question_ids = [x.decode('utf-8') for x in sample[1].numpy()]
+
+        # Finaally, we produce the output dictionary for the batch
         input_ids = features["input_ids"]
-
         for i in range(len(input_ids)):
-            one_sample_input_ids = input_ids[i]
-            one_sample_question_id = question_ids[i]
-            one_sample_predicted_limits = predicted_limits[i]
-
-            predictions[one_sample_question_id] = config.tokenizer.decode(
-                one_sample_input_ids[
-                    one_sample_predicted_limits[0]:one_sample_predicted_limits[1]+1
+            input_id = input_ids[i]
+            question_id = question_ids[i]
+            predicted_limit = predicted_limits[i]
+            # In the output dictionary, the key is given by the question ID,
+            # while the answer is provided as decoded text.
+            predictions[question_id] = config.tokenizer.decode(
+                input_id[
+                    predicted_limit[0]:predicted_limit[1]+1
                 ], skip_special_tokens=True
             )
     
