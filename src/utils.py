@@ -215,7 +215,7 @@ def create_full_dataset(data: Dict, config: Config,
                     truncation = True,
                     padding = 'max_length',             # Pads all sequences to 512.
 
-                    return_token_type_ids = False,      # Return if the token is from sentence 
+                    return_token_type_ids = True,       # Return if the token is from sentence 
                                                         # 0 or sentence 1
                     return_attention_mask = True,       # Return if it's a pad token or not
 
@@ -344,7 +344,7 @@ def dataset_generator(data: Dict, config: Config,
                     truncation = True,
                     padding = 'max_length',             # Pads all sequences to 512.
 
-                    return_token_type_ids = False,      # Return if the token is from sentence 
+                    return_token_type_ids = True,      # Return if the token is from sentence 
                                                         # 0 or sentence 1
                     return_attention_mask = True,       # Return if it's a pad token or not
 
@@ -448,7 +448,8 @@ def create_dataset_from_generator(
     # Create expected signature for the generator output
     features = {
         'input_ids': tf.TensorSpec(shape=(512,), dtype=tf.int32), 
-        'attention_mask': tf.TensorSpec(shape=(512,), dtype=tf.int32)
+        'attention_mask': tf.TensorSpec(shape=(512,), dtype=tf.int32),
+        'token_type_ids': tf.TensorSpec(shape=(512,), dtype=tf.int32)
     }
     if use_NER_attention:
         features['NER_attention'] = tf.TensorSpec(shape=(512,), dtype=tf.float64)

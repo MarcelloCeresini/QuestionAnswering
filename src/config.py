@@ -1,4 +1,4 @@
-from transformers import DistilBertTokenizerFast, TFDistilBertModel
+from transformers import BertTokenizerFast, TFBertModel
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
@@ -23,8 +23,8 @@ class Config():
         self.BATCH_SIZE = 64        # Number of (question+context) pairs fed to the network for training
         self.VAL_BATCH_SIZE = 64    # number of (question+context) pairs fed to the network for validation
 
-        self.HuggingFace_import = 'distilbert-base-uncased'         # Which model to instantiate from HuggingFace
-        self.tokenizer = DistilBertTokenizerFast.from_pretrained(   # Instance of the tokenizer
+        self.HuggingFace_import = 'bert-base-uncased'         # Which model to instantiate from HuggingFace
+        self.tokenizer = BertTokenizerFast.from_pretrained(   # Instance of the tokenizer
             self.HuggingFace_import
         )
         self.INPUT_LEN = 512        # The maximum sequence length for the model
@@ -54,11 +54,11 @@ class Config():
         self.ner_extractor = spacy.load("en_core_web_sm", disable=["tok2vec", "tagger", 
             "parser", "attribute_ruler", "lemmatizer"])
 
-    def get_new_distilbert_transformer(self) -> TFDistilBertModel:
+    def get_new_distilbert_transformer(self) -> TFBertModel:
         '''
         This function returns a fresh instance of the transformer model.
         '''
-        return TFDistilBertModel.from_pretrained( # The instantiation of the transformer model
+        return TFBertModel.from_pretrained( # The instantiation of the transformer model
             self.HuggingFace_import, output_hidden_states = True
         )    
 
