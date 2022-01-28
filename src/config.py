@@ -54,7 +54,7 @@ class Config():
         self.ner_extractor = spacy.load("en_core_web_sm", disable=["tok2vec", "tagger", 
             "parser", "attribute_ruler", "lemmatizer"])
 
-    def get_new_distilbert_transformer(self) -> TFBertModel:
+    def get_new_bert_transformer(self) -> TFBertModel:
         '''
         This function returns a fresh instance of the transformer model.
         '''
@@ -103,14 +103,16 @@ class Config():
             name="attention_mask", dtype='int32'
         )
         # In case BERT is used rather than DistilBERT, we should also have this third input
-        # token_type_ids = tf.keras.Input(shape=(SHAPE_ATTENTION_MASK, ), dtype='int32') # uncomment if using BERT
+        token_type_ids = tf.keras.Input(shape=(self.INPUT_LEN, ), 
+            name='token_type_ids', dtype='int32'
+        )
 
         # We pass them to the transformer (that is instanced ex-novo)
-        transformer = self.get_new_distilbert_transformer()(
+        transformer = self.get_new_bert_transformer()(
             {
                 "input_ids": input_ids,
                 "attention_mask": attention_mask,
-                # "token_type_ids": token_type_ids # uncomment if using BERT
+                "token_type_ids": token_type_ids
             }
         )
 
@@ -147,7 +149,7 @@ class Config():
 
         # Return the model
         return keras.Model(
-            inputs=[input_ids, attention_mask],
+            inputs=[input_ids, attention_mask, token_type_ids],
             outputs = [out_S, out_E]
         )
         
