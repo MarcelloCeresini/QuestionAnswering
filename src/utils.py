@@ -378,8 +378,8 @@ def dataset_generator(data: Dict, config: Config,
                     )
 
                 encoded_inputs.pop("offset_mapping", None) # Removes the offset mapping, not useful anymore 
-                                                        # ("None" is used because otherwise KeyError 
-                                                        # could be raised if the key wasn't present)
+                                                           # ("None" is used because otherwise KeyError 
+                                                           # could be raised if the key wasn't present)
 
                 if return_question_id and return_labels:  
                     yield dict(encoded_inputs), question_and_answer['id'], {
@@ -395,7 +395,6 @@ def dataset_generator(data: Dict, config: Config,
                     yield dict(encoded_inputs), question_and_answer['id']
                 else:
                     yield dict(encoded_inputs)
-
 
 def create_dataset_from_generator(
         data: Dict,
@@ -514,7 +513,6 @@ def start_end_token_from_probabilities(
         col = val - dim*row
         idxs.append([row,col])
     return idxs
-
 
 def compute_predictions(dataset: tf.data.Dataset,
                         config: Config,
