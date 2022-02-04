@@ -1,16 +1,18 @@
-from transformers import DistilBertTokenizerFast, TFDistilBertModel
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 import spacy
 import os
+from transformers import BertTokenizerFast, TFBertModel, \
+                         DistilBertTokenizerFast, TFDistilBertModel
 
 class Config():
     '''
     A single object to contain all constants and some utility methods.
     '''    
-    def __init__(self) -> None:
+    def __init__(self, bert=False) -> None:
 
+        self.bert = bert
         self.ROOT_PATH = self.find_root_path(os.getcwd())   # The root path of the project, useful for using relative paths
 
         self.RANDOM_SEED = 42       # The random seed for all random operations
@@ -23,10 +25,16 @@ class Config():
         self.BATCH_SIZE = 64        # Number of (question+context) pairs fed to the network for training
         self.VAL_BATCH_SIZE = 64    # number of (question+context) pairs fed to the network for validation
 
-        self.HuggingFace_import = 'distilbert-base-uncased'         # Which model to instantiate from HuggingFace
-        self.tokenizer = DistilBertTokenizerFast.from_pretrained(   # Instance of the tokenizer
-            self.HuggingFace_import
-        )
+        if not self.bert:
+            self.HuggingFace_import = 'distilbert-base-uncased'         # Which model to instantiate from HuggingFace
+            self.tokenizer = DistilBertTokenizerFast.from_pretrained(   # Instance of the tokenizer
+                self.HuggingFace_import
+            )
+        else:
+            self.HuggingFace_import = 'bert-base-uncased'         # Which model to instantiate from HuggingFace
+            self.tokenizer = BertTokenizerFast.from_pretrained(   # Instance of the tokenizer
+                self.HuggingFace_import
+            ) 
         self.INPUT_LEN = 512        # The maximum sequence length for the model
 
         self.SAVE_PATH_TRAIN_DS_TRAINING_NER = os.path.join(self.ROOT_PATH, 
@@ -56,11 +64,28 @@ class Config():
 
     def get_new_distilbert_transformer(self) -> TFDistilBertModel:
         '''
-        This function returns a fresh instance of the transformer model.
+        This function returns a fresh instance of the transformer (DistilBert) model.
         '''
         return TFDistilBertModel.from_pretrained( # The instantiation of the transformer model
             self.HuggingFace_import, output_hidden_states = True
-        )    
+        )   
+
+    def get_new_bert_transformer(self) -> TFBertModel:
+        '''
+        This function returns a fresh instance of the transformer (Bert) model.
+        '''
+        return TFBertModel.from_pretrained( # The instantiation of the transformer model
+            self.HuggingFace_import, output_hidden_states = True
+        )  
+
+    def get_transformer(self):
+        '''
+        This function returns the appropriate transformer based on the `bert` flag.
+        '''
+        if self.bert:
+            return self.get_new_bert_transformer()
+        else:
+            return self.get_new_distilbert_transformer()
 
     def find_root_path(self, current_path):
         '''
@@ -103,16 +128,29 @@ class Config():
             name="attention_mask", dtype='int32'
         )
         # In case BERT is used rather than DistilBERT, we should also have this third input
-        # token_type_ids = tf.keras.Input(shape=(SHAPE_ATTENTION_MASK, ), dtype='int32') # uncomment if using BERT
+        if self.bert:
+            token_type_ids = tf.keras.Input(shape=(self.INPUT_LEN, ), 
+                name='token_type_ids', dtype='int32'
+            )
 
-        # We pass them to the transformer (that is instanced ex-novo)
-        transformer = self.get_new_distilbert_transformer()(
-            {
-                "input_ids": input_ids,
-                "attention_mask": attention_mask,
-                # "token_type_ids": token_type_ids # uncomment if using BERT
-            }
-        )
+        if self.bert:
+            # We pass them to the transformer (that is instanced ex-novo)
+            transformer = self.get_new_bert_transformer()(
+                {
+                    "input_ids": input_ids,
+                    "attention_mask": attention_mask,
+                    "token_type_ids": token_type_ids
+                }
+            )
+        else:
+            # We pass them to the transformer (that is instanced ex-novo)
+            transformer = self.get_new_distilbert_transformer()(
+                {
+                    "input_ids": input_ids,
+                    "attention_mask": attention_mask,
+                    # "token_type_ids": token_type_ids # uncomment if using BERT
+                }
+            )
 
         # We care about the hidden states of the transformer
         hidden_states = transformer.hidden_states
@@ -146,8 +184,15 @@ class Config():
         out_E = layers.Softmax(name="out_E", dtype='float32')(out_E)
 
         # Return the model
-        return keras.Model(
-            inputs=[input_ids, attention_mask],
-            outputs = [out_S, out_E]
-        )
+        if self.bert:
+            model = keras.Model(
+                inputs=[input_ids, attention_mask, token_type_ids],
+                outputs = [out_S, out_E]
+            )
+        else:
+            model = keras.Model(
+                inputs=[input_ids, attention_mask],
+                outputs = [out_S, out_E]
+            )
+        return model
         

@@ -172,6 +172,8 @@ def create_full_dataset(data: Dict, config: Config,
                     token is padding or not
                 - NER_attention (optional, flag `return_NER_attention`): 
                     array containing the NER attention weights
+                - token_type_ids (optional, if `config` was instanced using 
+                    the `bert=True` flag)
             - ids: List[str] --> The list of IDs of questions in the dataset.
             - labels: (optional) `Dict` --> keys:
                 - gt_S: array representing the index of the initial token 
@@ -215,7 +217,7 @@ def create_full_dataset(data: Dict, config: Config,
                     truncation = True,
                     padding = 'max_length',             # Pads all sequences to 512.
 
-                    return_token_type_ids = False,      # Return if the token is from sentence 
+                    return_token_type_ids = config.bert,# Return if the token is from sentence 
                                                         # 0 or sentence 1
                     return_attention_mask = True,       # Return if it's a pad token or not
 
@@ -310,6 +312,8 @@ def dataset_generator(data: Dict, config: Config,
                     token is padding or not
                 - NER_attention (optional, flag `return_NER_attention`): 
                     array containing the NER attention weights
+                - token_type_ids (optional, if `config` was instanced using 
+                    the `bert=True` flag)
             - ids: List[str] --> The list of IDs of questions in the dataset.
             - labels: (optional) `Dict` --> keys:
                 - gt_S: array representing the index of the initial token 
@@ -344,7 +348,7 @@ def dataset_generator(data: Dict, config: Config,
                     truncation = True,
                     padding = 'max_length',             # Pads all sequences to 512.
 
-                    return_token_type_ids = False,      # Return if the token is from sentence 
+                    return_token_type_ids = config.bert,# Return if the token is from sentence 
                                                         # 0 or sentence 1
                     return_attention_mask = True,       # Return if it's a pad token or not
 
@@ -431,6 +435,8 @@ def create_dataset_from_generator(
                     token is padding or not
                 - NER_attention (optional, flag `return_NER_attention`): 
                     array containing the NER attention weights
+                - token_type_ids (optional, if `config` was instanced using 
+                    the `bert=True` flag)
             - ids: List[str] (optional) --> The list of IDs of questions in the dataset.
             - labels: (optional) `Dict` --> keys:
                 - gt_S: array representing the index of the initial token 
@@ -445,10 +451,17 @@ def create_dataset_from_generator(
     return_question_id = not for_training
 
     # Create expected signature for the generator output
-    features = {
-        'input_ids': tf.TensorSpec(shape=(512,), dtype=tf.int32), 
-        'attention_mask': tf.TensorSpec(shape=(512,), dtype=tf.int32)
-    }
+    if config.bert:
+        features = {
+            'input_ids': tf.TensorSpec(shape=(512,), dtype=tf.int32), 
+            'attention_mask': tf.TensorSpec(shape=(512,), dtype=tf.int32),
+            'token_type_ids': tf.TensorSpec(shape=(512,), dtype=tf.int32)
+        }
+    else:
+        features = {
+            'input_ids': tf.TensorSpec(shape=(512,), dtype=tf.int32), 
+            'attention_mask': tf.TensorSpec(shape=(512,), dtype=tf.int32)
+        }
     if use_NER_attention:
         features['NER_attention'] = tf.TensorSpec(shape=(512,), dtype=tf.float64)
     if for_training:
