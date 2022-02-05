@@ -1,6 +1,7 @@
 ### This file contains utility functions that are used in   ###
 ###      all notebooks and scripts of the project.          ###
 
+from base64 import encode
 from typing import List, Dict, Tuple
 from tqdm import tqdm
 import json
@@ -77,7 +78,8 @@ def find_start_end_token_one_hot_encoded(
     return result
 
 
-def create_NER_attention_vector(context: str, 
+def create_NER_attention_vector(question: str,
+    context: str, 
     offsets: List[Tuple[int]],
     spacy_instance,
     config:Config, non_ne_weight:float=0.8,
@@ -114,6 +116,33 @@ def create_NER_attention_vector(context: str,
     starting_chars = [ ent.start_char for ent in doc.ents ]
     ending_chars   = [ ent.end_char for ent in doc.ents ]
     
+    doc_question = spacy_instance(question)
+    starting_chars_question = [ ent.start_char for ent in doc_question.ents ]
+    ending_chars_question   = [ ent.end_char for ent in doc_question.ents ]
+
+    # first the question
+
+    NER_index = 0
+    j = 1
+    while j < len(offsets):
+        if offsets[j] == (0,0): # you reached the context, break
+            break
+        # If there are still named entities to find
+        if NER_index < len(starting_chars_question):
+            # When we find a match with the starting index, go on to find the end index
+            if starting_chars_question[NER_index] >= offsets[j][0] and starting_chars_question[NER_index] < offsets[j][1]:
+                # Put a ne_weight at all indices containing a named entity
+                NER_attention[j] = ne_weight
+                while ending_chars_question[NER_index] > offsets[j][1] and j < len(offsets)-1:
+                    j += 1
+                    if offsets[j] == (0,0): # you reached the context, break
+                        break
+                    NER_attention[j] = ne_weight
+                # Update the counter for tagged named entities
+                NER_index += 1
+        j += 1
+        
+
     # Iterate over the offsets to obtain the NER tokens
     NER_index = 0
     # We skip the first token, [CLS], that has (0,0) as a tuple
@@ -518,6 +547,82 @@ def create_original_dataset(data: Dict, config: Config):
 
     return tf.data.Dataset.from_tensor_slices(
         pd.DataFrame.from_dict(features).to_dict(orient="list"))
+
+def NER_analysis(data: Dict, config: Config, NER_value: np.float64):
+
+    question_NER_counts = []
+    context_NER_counts = []
+    question_totals = []
+    context_totals = []
+
+
+    for article in tqdm(data["data"]):
+        for paragraph in article["paragraphs"]:
+            for question_and_answer in paragraph["qas"]:
+                ### QUESTION AND CONTEXT TOKENIZATION ###
+                # For question answering with DistilBERT we need to encode both 
+                # question and context, and this is the way in which 
+                # HuggingFace's DistilBertTokenizer does it.
+                # The tokenizer returns a dictionary containing all the information we need
+                encoded_inputs = config.tokenizer(
+                    question_and_answer["question"],    # First we pass the question
+                    paragraph["context"],               # Then the context
+
+                    max_length = config.INPUT_LEN,      # We want to pad and truncate to this length
+                    truncation = True,
+                    padding = 'max_length',             # Pads all sequences to 512.
+
+                    return_token_type_ids = False,      # Return if the token is from sentence 
+                                                        # 0 or sentence 1
+                    return_attention_mask = True,       # Return if it's a pad token or not
+
+                    return_offsets_mapping = True       # Returns each token's first and last char 
+                                                        # positions in the original sentence
+                                                        # (we will use it to match answers starting 
+                                                        # and ending points to tokens)
+                )
+
+                # We call the function that produces NER weights for tokens
+                encoded_inputs['NER_attention'] = create_NER_attention_vector(
+                    question=question_and_answer["question"],
+                    context=paragraph["context"],
+                    offsets=encoded_inputs["offset_mapping"],
+                    spacy_instance=config.ner_extractor,
+                    config=config,
+                    non_ne_weight=1-NER_value,
+                    ne_weight=1+NER_value
+                )
+
+                count_NER_question = 0
+                count_NER_context = 0
+                count_total_context = 0
+                SEP_IDX = 0
+                for i in range(1, len(encoded_inputs["NER_attention"])):
+                    if encoded_inputs["offset_mapping"][i] == (0,0):
+                        SEP_IDX = i
+                        break
+                    if encoded_inputs["NER_attention"][i] == 1+NER_value:
+                        count_NER_question += 1
+                    
+                for i in range(SEP_IDX+1, len(encoded_inputs["NER_attention"])):
+                    if encoded_inputs["offset_mapping"][i] == (0,0):
+                        break
+                    if encoded_inputs["attention_mask"] == 0:
+                        break
+                    count_total_context += 1
+                    if encoded_inputs["NER_attention"][i] == 1+NER_value:
+                        count_NER_context += 1
+                
+                count_total_question = SEP_IDX-1
+
+                question_NER_counts.append(count_NER_question)
+                context_NER_counts.append(count_NER_context)
+                question_totals.append(count_total_question)
+                context_totals.append(count_total_context)
+
+    return (question_NER_counts, context_NER_counts, question_totals, context_totals)
+
+
 
 
 def start_end_token_from_probabilities(
