@@ -504,7 +504,7 @@ def create_original_dataset(data: Dict, config: Config):
 
                     return_token_type_ids = False,      # Return if the token is from sentence 
                                                         # 0 or sentence 1
-                    return_attention_mask = True,       # Return if it's a pad token or not
+                    return_attention_mask = False,      # Return if it's a pad token or not
 
                     return_offsets_mapping = True       # Returns each token's first and last char 
                                                         # positions in the original sentence
@@ -570,8 +570,8 @@ def compute_predictions(dataset: tf.data.Dataset,
     # a batch)
     for sample, original_sample in tqdm(zip(dataset, original_dataset)):
         # We let the model predict the probability tensors given the input features
-        contexts = original_sample["context"]
-        offsets = original_sample["offset_mapping"]
+        contexts = original_sample["context"].numpy()
+        offsets = original_sample["offset_mapping"].numpy()
 
         features = sample[0]
         pstartv, pendv = model.predict(features)
@@ -583,19 +583,17 @@ def compute_predictions(dataset: tf.data.Dataset,
         question_ids = [x.decode('utf-8') for x in sample[1].numpy()]
 
         # Finaally, we produce the output dictionary for the batch
-        input_ids = features["input_ids"]
-        for i in range(len(input_ids)):
-            # input_id = input_ids[i] # TODO: NOT NEEDED anymore
+        for i in range(len(features["input_ids"])):
             question_id = question_ids[i]
             predicted_limit = predicted_limits[i]
             context = contexts[i]
             offset = offsets[i]
             # take the index of the predicted start token token, take the corresponding offsets, and take the first number (the start)
             # same thiing for the end token, but with the end of the offset
-            predictions[question_id] = context[
-                offset[predicted_limit[0]][0]   
-                :
-                offset[predicted_limit[1]][1]
+            predictions[question_id] = context.decode()[
+                offset[predicted_limit[0], 0] 
+                : 
+                offset[predicted_limit[1], 1]
             ]
 
     return predictions
