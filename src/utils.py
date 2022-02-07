@@ -576,7 +576,6 @@ def compute_predictions(dataset: tf.data.Dataset,
     - dataset: a `tf.data.Dataset` on which we will compute predictions.
     - original_dataset: a `tf.data.Dataset` which contains the original context
         and initial/starting characters for each token.
-    - config: a `Config` element that contains all parameters to be used
     - model: a `keras.Model` that computes the predictions.
     '''
     predictions = {}
