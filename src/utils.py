@@ -493,6 +493,45 @@ def create_dataset_from_generator(
     # Return the dataset
     return dataset
 
+def create_original_dataset(data: Dict, config: Config):
+
+    features = []
+
+    for article in tqdm(data["data"]):
+        for paragraph in article["paragraphs"]:
+            for question_and_answer in paragraph["qas"]:
+
+                inputs={}
+                ### QUESTION AND CONTEXT TOKENIZATION ###
+                # For question answering with DistilBERT we need to encode both 
+                # question and context, and this is the way in which 
+                # HuggingFace's DistilBertTokenizer does it.
+                # The tokenizer returns a dictionary containing all the information we need
+                encoded_inputs = config.tokenizer(
+                    question_and_answer["question"],    # First we pass the question
+                    paragraph["context"],               # Then the context
+
+                    max_length = config.INPUT_LEN,      # We want to pad and truncate to this length
+                    truncation = True,
+                    padding = 'max_length',             # Pads all sequences to 512.
+
+                    return_token_type_ids = False,      # Return if the token is from sentence 
+                                                        # 0 or sentence 1
+                    return_attention_mask = False,      # Return if it's a pad token or not
+
+                    return_offsets_mapping = True       # Returns each token's first and last char 
+                                                        # positions in the original sentence
+                                                        # (we will use it to match answers starting 
+                                                        # and ending points to tokens)
+                )
+                inputs["context"] = paragraph["context"]
+                inputs["offset_mapping"] = encoded_inputs["offset_mapping"]
+
+                features.append(inputs)
+
+    return tf.data.Dataset.from_tensor_slices(
+        pd.DataFrame.from_dict(features).to_dict(orient="list"))
+
 
 def start_end_token_from_probabilities(
     pstartv: np.array, 
@@ -528,21 +567,26 @@ def start_end_token_from_probabilities(
     return idxs
 
 def compute_predictions(dataset: tf.data.Dataset,
-                        config: Config,
+                        original_dataset: tf.data.Dataset,
                         model: keras.Model):
     '''
     Computes predictions given the dataset, the used configuration parameters and model
 
     Inputs:
     - dataset: a `tf.data.Dataset` on which we will compute predictions.
+    - original_dataset: a `tf.data.Dataset` which contains the original context
+        and initial/starting characters for each token.
     - config: a `Config` element that contains all parameters to be used
     - model: a `keras.Model` that computes the predictions.
     '''
     predictions = {}
     # For each sample we can extract from the dataset (it can be a single element or 
     # a batch)
-    for sample in tqdm(dataset):
+    for sample, original_sample in tqdm(zip(dataset, original_dataset), total=len(dataset)):
         # We let the model predict the probability tensors given the input features
+        contexts = original_sample["context"].numpy()
+        offsets = original_sample["offset_mapping"].numpy()
+
         features = sample[0]
         pstartv, pendv = model.predict(features)
         # We obtain the span from the probabilities
@@ -553,17 +597,17 @@ def compute_predictions(dataset: tf.data.Dataset,
         question_ids = [x.decode('utf-8') for x in sample[1].numpy()]
 
         # Finaally, we produce the output dictionary for the batch
-        input_ids = features["input_ids"]
-        for i in range(len(input_ids)):
-            input_id = input_ids[i]
+        for i in range(len(features["input_ids"])):
             question_id = question_ids[i]
             predicted_limit = predicted_limits[i]
-            # In the output dictionary, the key is given by the question ID,
-            # while the answer is provided as decoded text.
-            predictions[question_id] = config.tokenizer.decode(
-                input_id[
-                    predicted_limit[0]:predicted_limit[1]+1
-                ], skip_special_tokens=True
-            )
-    
+            context = contexts[i]
+            offset = offsets[i]
+            # take the index of the predicted start token token, take the corresponding offsets, and take the first number (the start)
+            # same thiing for the end token, but with the end of the offset
+            predictions[question_id] = context.decode()[
+                offset[predicted_limit[0], 0] 
+                : 
+                offset[predicted_limit[1], 1]
+            ]
+
     return predictions

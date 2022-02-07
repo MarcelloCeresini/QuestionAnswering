@@ -10,6 +10,7 @@ ipython_config.py
 
 # pyenv
 .python-version
+.vscode
 
 # Environments
 .env
