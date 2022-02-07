@@ -568,7 +568,7 @@ def compute_predictions(dataset: tf.data.Dataset,
     predictions = {}
     # For each sample we can extract from the dataset (it can be a single element or 
     # a batch)
-    for sample, original_sample in tqdm(zip(dataset, original_dataset)):
+    for sample, original_sample in tqdm(zip(dataset, original_dataset), total=len(dataset)):
         # We let the model predict the probability tensors given the input features
         contexts = original_sample["context"].numpy()
         offsets = original_sample["offset_mapping"].numpy()
