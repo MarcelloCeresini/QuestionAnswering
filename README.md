@@ -16,7 +16,15 @@ Then, once the environment is active:
 python3 -m pip install -r requirements.txt
 ```
 
-Our normal model's weights can be downloaded from [here](https://drive.google.com/file/d/1wtVeJk5Szqc8nLt6wjsPh-oniIA1splv/view?usp=sharing). They must be placed in `src/checkpoints`. Then, the model can be evaluated on a test dataset using `python3 compute_answers.py *PATH_TO_TEST_JSON_FILE*`.
+Our normal model's weights can be downloaded from [here](https://drive.google.com/file/d/1wtVeJk5Szqc8nLt6wjsPh-oniIA1splv/view?usp=sharing). They must be placed in `src/checkpoints`.
+
+Another important step is to download SpaCy's english language model:
+
+```bash
+python3 -m spacy download en_core_web_sm
+```
+
+Then, the model can be evaluated on a test dataset using `python3 compute_answers.py *PATH_TO_TEST_JSON_FILE*`.
 
 
 ## Organization of the repository
