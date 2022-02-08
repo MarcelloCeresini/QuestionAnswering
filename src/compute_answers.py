@@ -7,7 +7,7 @@ import utils
 
 # For Colab:
 # BEST_WEIGHTS_PATH = "/content/drive/MyDrive/Uni/Magistrale/NLP/Shared/ProjectWeights/training/data/training/"
-BEST_WEIGHTS_PATH = os.path.join('checkpoints', 'normal', 'normal.h5')  # TODO: Add the correct path to the weights
+BEST_WEIGHTS_PATH = os.path.join('checkpoints', 'normal', 'normal.h5')
 PATH_TO_PREDICTIONS_JSON = os.path.join('eval', 'output_predictions.json')
 
 if __name__ == '__main__':
@@ -29,7 +29,6 @@ if __name__ == '__main__':
     # Load model
     model:tf.keras.Model = config.create_standard_model(hidden_state_list=[3,4,5,6])
     # Load best model weights
-    #   TODO: We have no weights yet
     model.load_weights(BEST_WEIGHTS_PATH)
     # Predict the answers to the questions in the dataset
     predictions = utils.compute_predictions(dataset, original_dataset, model)

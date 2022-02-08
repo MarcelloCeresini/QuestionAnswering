@@ -371,7 +371,6 @@ def dataset_generator(data: Dict, config: Config,
 
 
                 if return_NER_attention:
-                    # TODO: implement a realistic NER attention vector
                     encoded_inputs['NER_attention'] = create_NER_attention_vector(
                         context=paragraph["context"], 
                         offsets=encoded_inputs["offset_mapping"],
