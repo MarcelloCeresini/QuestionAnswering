@@ -5,9 +5,7 @@ import tensorflow as tf
 from config import Config
 import utils
 
-# For Colab:
-# BEST_WEIGHTS_PATH = "/content/drive/MyDrive/Uni/Magistrale/NLP/Shared/ProjectWeights/training/data/training/"
-BEST_WEIGHTS_PATH = os.path.join('checkpoints', 'normal', 'normal.h5')
+BEST_WEIGHTS_PATH = os.path.join('checkpoints', 'normal.h5')
 PATH_TO_PREDICTIONS_JSON = os.path.join('eval', 'output_predictions.json')
 
 if __name__ == '__main__':

@@ -24,4 +24,5 @@ venv.bak/
 # directories
 data/training
 data/full_datasets
-src/checkpoints
+src/checkpoints/*.h5
+src/checkpoints/*.json
