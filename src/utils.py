@@ -23,7 +23,7 @@ def read_question_set(path_to_json:str) -> Dict:
 
 def find_start_end_token_one_hot_encoded(
     answers: Dict, 
-    offsets: List[Tuple[int]]) -> int:
+    offsets: List[Tuple[int]]) -> Dict:
     '''
     This function returns the starting and ending token of the answer, 
     already one hot encoded and ready for binary crossentropy.
