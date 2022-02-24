@@ -80,8 +80,7 @@ def find_start_end_token_one_hot_encoded(
 def create_NER_attention_vector(context: str, 
     offsets: List[Tuple[int]],
     spacy_instance,
-    config:Config, non_ne_weight:float=0.8,
-    ne_weight:float=1.2):
+    config:Config):
     '''
     Creates a NER_attention vector. 
     It uses SpaCy for finding named entities in the context. Then it matches the
@@ -109,7 +108,7 @@ def create_NER_attention_vector(context: str,
     doc = spacy_instance(context)
 
     # Instantiates the NER attention vector (default weight: 0.8)
-    NER_attention  = np.ones(config.INPUT_LEN) * non_ne_weight
+    NER_attention  = np.zeros(config.INPUT_LEN)
     # Create lists of starting and ending character indices of named entities
     starting_chars = [ ent.start_char for ent in doc.ents ]
     ending_chars   = [ ent.end_char for ent in doc.ents ]
@@ -131,10 +130,10 @@ def create_NER_attention_vector(context: str,
                     # When we find a match with the starting index, go on to find the end index
                     if starting_chars[NER_index] >= offsets[j][0] and starting_chars[NER_index] < offsets[j][1]:
                         # Put a ne_weight at all indices containing a named entity
-                        NER_attention[j] = ne_weight
+                        NER_attention[j] = 1
                         while ending_chars[NER_index] > offsets[j][1] and j < len(offsets)-1:
                             j += 1
-                            NER_attention[j] = ne_weight
+                            NER_attention[j] = 1
                         # Update the counter for tagged named entities
                         NER_index += 1
                 j += 1
@@ -143,7 +142,7 @@ def create_NER_attention_vector(context: str,
 
 def create_full_dataset(data: Dict, config: Config,
     return_labels:bool=False, return_NER_attention:bool=False,
-    return_question_id:bool=False, NER_value:float=0):
+    return_question_id:bool=False):
     '''
     This function takes in input the whole data structure and constructs
     a full high-level dataset, which produces (question+context) pairs
@@ -247,9 +246,7 @@ def create_full_dataset(data: Dict, config: Config,
                         context=paragraph["context"], 
                         offsets=encoded_inputs["offset_mapping"],
                         spacy_instance=config.ner_extractor,
-                        config=config, 
-                        non_ne_weight=1-NER_value,
-                        ne_weight=1+NER_value
+                        config=config
                     )
 
                 encoded_inputs.pop("offset_mapping", None) # Removes the offset mapping, not useful anymore 
@@ -283,7 +280,7 @@ def create_full_dataset(data: Dict, config: Config,
 
 def dataset_generator(data: Dict, config: Config,
     return_labels:bool=False, return_NER_attention:bool=False,
-    return_question_id:bool=False, NER_value:float=0):
+    return_question_id:bool=False):
     '''
     This function takes in input the whole data structure and iteratively 
     yields (question+context) pairs, plus optionally their label and question
@@ -375,9 +372,7 @@ def dataset_generator(data: Dict, config: Config,
                         context=paragraph["context"], 
                         offsets=encoded_inputs["offset_mapping"],
                         spacy_instance=config.ner_extractor,
-                        config=config, 
-                        non_ne_weight=1-NER_value,
-                        ne_weight=1+NER_value
+                        config=config
                     )
 
                 encoded_inputs.pop("offset_mapping", None) # Removes the offset mapping, not useful anymore 
@@ -403,8 +398,7 @@ def create_dataset_from_generator(
         data: Dict,
         config: Config,
         for_training: bool=True,
-        use_NER_attention:bool=False,
-        NER_value:float=0
+        use_NER_attention:bool=False
     ) -> tf.data.Dataset:
     '''
     This function is used to create a lightweight TensorFlow Dataset from
@@ -477,8 +471,7 @@ def create_dataset_from_generator(
     data_gen = partial(dataset_generator, data, config, 
         return_labels=return_labels, 
         return_question_id=return_question_id,
-        return_NER_attention=use_NER_attention,
-        NER_value=NER_value)
+        return_NER_attention=use_NER_attention)
     # Creates the dataset with the computed signature
     dataset = tf.data.Dataset.from_generator(data_gen,
         output_signature=signature)

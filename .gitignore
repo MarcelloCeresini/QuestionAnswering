@@ -23,6 +23,6 @@ venv.bak/
 
 # directories
 data/training
-data/full_datasets
 src/checkpoints/*.h5
 src/checkpoints/*.json
+src/wandb/run-20220224_085621-37rscqj5/files/model-best.h5
