@@ -600,8 +600,9 @@ def compute_predictions(dataset: tf.data.Dataset,
             predicted_limit = predicted_limits[i]
             context = contexts[i]
             offset = offsets[i]
-            # take the index of the predicted start token token, take the corresponding offsets, and take the first number (the start)
-            # same thiing for the end token, but with the end of the offset
+            # take the index of the predicted start token token, 
+            # take the corresponding offsets, and take the first number (the start)
+            # same thing for the end token, but with the end of the offset
             predictions[question_id] = context.decode()[
                 offset[predicted_limit[0], 0] 
                 : 
