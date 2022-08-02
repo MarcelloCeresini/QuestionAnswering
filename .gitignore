@@ -25,4 +25,5 @@ venv.bak/
 data/training
 data/full_datasets
 src/checkpoints/*.h5
+src/checkpoints/training_dpr/*
 src/checkpoints/*.json
