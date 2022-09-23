@@ -586,7 +586,7 @@ def compute_predictions(dataset: tf.data.Dataset,
         offsets = original_sample["offset_mapping"].numpy()
 
         features = sample[0]
-        pstartv, pendv = model.predict(features)
+        pstartv, pendv = model.predict(features, verbose=0)
         # We obtain the span from the probabilities
         predicted_limits = start_end_token_from_probabilities(
             pstartv, pendv

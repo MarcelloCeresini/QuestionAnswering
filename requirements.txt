@@ -9,4 +9,3 @@ tensorboard
 transformers
 spacy==3.2.1
 benepar
-# Install FAISS with: conda install -c pytorch faiss-gpu (only on linux, otherwise faiss-cpu)
