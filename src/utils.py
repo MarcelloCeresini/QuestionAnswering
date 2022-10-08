@@ -610,3 +610,202 @@ def compute_predictions(dataset: tf.data.Dataset,
             ]
 
     return predictions
+
+###################################################################################
+###################################################################################
+
+##### RETRIEVAL CLASSES
+
+class ReducedDistilBertModel(keras.Model):
+    def __init__(self, distilbert_model, dimensionality=768):
+        super(ReducedDistilBertModel, self).__init__()
+        self.distilbert_model = distilbert_model
+        self.dimensionality = dimensionality
+        self.reduction_layer = keras.layers.Dense(self.dimensionality, 
+                                            activation='gelu')
+
+    def call(self, inputs):
+        hidden_state = self.distilbert_model(inputs).last_hidden_state
+        # We introduce a dense layer that simply reduces the dimensionality of the model's output.
+        # It's not used if the output dimensionality is the same of the Bert model
+        return self.reduction_layer(hidden_state) if self.dimensionality != 768 else hidden_state
+
+
+class DenseEncoder(layers.Layer):
+    def __init__(self, model_q, model_p):
+        super().__init__()
+        self.model_q = model_q  # Dense encoder for questions
+        self.model_p = model_p  # Dense encoder for paragraphs
+    
+    def call(self, inputs, training=False):
+        # Encode the questions in the batch
+        # Take the first token as representation of each question
+        q_repr = self.model_q({
+            'input_ids': inputs['questions']['input_ids'],
+            'attention_mask': inputs['questions']['attention_mask']
+        })[:,0,:]
+        # If we are training, we also return the representation of the paragraphs
+        # and of the hard paragraph
+        if training:
+            # Encode the batch of paragraphs
+            p_repr = self.model_p({
+                'input_ids': inputs['paragraphs']['input_ids'],
+                'attention_mask': inputs['paragraphs']['attention_mask']
+            })[:,0,:]
+            # We also encode the batch of hard paragraphs separately. 
+            p_hard_repr = self.model_p({
+                'input_ids': inputs['hard_paragraphs']['input_ids'],
+                'attention_mask': inputs['hard_paragraphs']['attention_mask']
+            })[:,0,:]
+            return q_repr, p_repr, p_hard_repr
+        else:
+            return q_repr
+
+
+class DeepQPEncoder(keras.Model):
+    def __init__(self, model_q, model_p):
+        super().__init__()
+        self.enc = DenseEncoder(model_q, model_p)
+
+    def call(self, inputs, training=False):
+        if training:
+            # For training we return the similarity matrix
+            repr_q, repr_p, repr_hard_p = self.enc(inputs, training=training)
+            S = tf.tensordot(repr_q, tf.transpose(repr_p), axes=1)
+            # We append the hard scores
+            hard_scores = tf.gather(
+                # Get the elements on the diagonal of the 8x8 matrix of 
+                # scores between questions and hard paragraphs
+                tf.tensordot(repr_q, tf.transpose(repr_hard_p), axes=1), 
+                    tf.expand_dims(
+                        tf.range(tf.shape(inputs['questions']['input_ids'])[0]), 
+                        axis=1), 
+                    batch_dims=1
+            )
+            S = tf.concat([S, hard_scores], axis=1)
+            return S
+        else:
+            # In other cases, we return the representation of the question(s)
+            repr_q = self.enc(inputs, training=training)            
+            return repr_q
+
+    def train_step(self, data):
+        x = data
+        # y = [0, ..., batch_size-1]
+        y = tf.range(tf.shape(x['questions']['input_ids'])[0])
+        with tf.GradientTape() as tape:
+            # Obtain similarities
+            S = self(x, training=True)
+            # Obtain loss value
+            loss = self.compiled_loss(y, S)
+        # Construct gradients and apply them through the optimizer
+        gradients = tape.gradient(loss, self.trainable_variables)
+        self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
+        # Update and return metrics (specifically the one for the loss value).
+        self.compiled_metrics.update_state(y, S)
+        return {m.name: m.result() for m in self.metrics}
+
+    def test_step(self, data):
+        x = data
+        # y = [0, ..., batch_size-1]
+        y = tf.range(tf.shape(x['questions']['input_ids'])[0])
+        S = self(x, training=True) # We are not really training, but we have to obtain S
+        self.compiled_loss(y, S)
+        self.compiled_metrics.update_state(y, S)
+        return {m.name: m.result() for m in self.metrics}
+
+##### RETRIEVAL FUNCTIONS
+
+def decode_dataset_fn(record_bytes, MAX_SEQ_LEN=512):
+    # Reads one element from the dataset (as bytes) and decodes it in a tf.data Dataset element.
+    example = tf.io.parse_single_example(
+      # Data
+      record_bytes,
+      # Schema
+      {"question__input_ids": tf.io.FixedLenFeature(shape=(MAX_SEQ_LEN,), dtype=tf.int64),
+       "question__attention_mask": tf.io.FixedLenFeature(shape=(MAX_SEQ_LEN,), dtype=tf.int64),
+       "question__index": tf.io.FixedLenFeature(shape=(), dtype=tf.int64),
+       "answer__out_s": tf.io.FixedLenFeature(shape=(MAX_SEQ_LEN,), dtype=tf.int64),
+       "answer__out_e": tf.io.FixedLenFeature(shape=(MAX_SEQ_LEN,), dtype=tf.int64),
+       "paragraph__input_ids": tf.io.FixedLenFeature(shape=(MAX_SEQ_LEN,), dtype=tf.int64),
+       "paragraph__attention_mask": tf.io.FixedLenFeature(shape=(MAX_SEQ_LEN,), dtype=tf.int64),
+       "hard_paragraph__input_ids": tf.io.FixedLenFeature(shape=(MAX_SEQ_LEN,), dtype=tf.int64),
+       "hard_paragraph__attention_mask": tf.io.FixedLenFeature(shape=(MAX_SEQ_LEN,), dtype=tf.int64),
+       "paragraph__tokens_s": tf.io.FixedLenFeature(shape=(MAX_SEQ_LEN,), dtype=tf.int64),
+       "paragraph__tokens_e": tf.io.FixedLenFeature(shape=(MAX_SEQ_LEN,), dtype=tf.int64),
+       "context__index": tf.io.FixedLenFeature(shape=(), dtype=tf.int64),
+       "paragraph__index": tf.io.FixedLenFeature(shape=(), dtype=tf.int64)})
+    return {
+      "questions": {'input_ids': example['question__input_ids'],
+                    'attention_mask': example['question__attention_mask'],
+                    'index': example['question__index']},
+      "answers":   {'out_s': example['answer__out_s'],
+                    'out_e': example['answer__out_e']},
+      "paragraphs":{'input_ids': example['paragraph__input_ids'],
+                    'attention_mask': example['paragraph__attention_mask'],
+                    'tokens_s': example['paragraph__tokens_s'],
+                    'tokens_e': example['paragraph__tokens_e']},
+      "hard_paragraphs": {'input_ids': example['hard_paragraph__input_ids'],
+                          'attention_mask': example['hard_paragraph__attention_mask']},
+      "context_ids": (example['context__index'], example['paragraph__index'])
+    }
+
+def get_questions_and_paragraphs(dataset):
+    '''
+    Returns a processed set of questions and paragraphs given a dataset.
+    '''
+    questions = [{
+            'qas': qas,
+            'context_id': (i,j)    # We also track the question's context index 
+                                   # so we are able to match a question to its 
+                                   # groundtruth paragraph.
+        }
+        for i in range(len(dataset))
+        for j, para in enumerate(dataset[i]['paragraphs'])
+        for qas in para['qas']
+    ]
+
+    paragraphs = [{
+            'context': para['context'],
+            'context_id': (i,j)
+        }
+        for i in range(len(dataset))
+        for j, para in enumerate(dataset[i]['paragraphs'])
+    ]
+
+    return questions, paragraphs
+
+def get_paragraph_from_question(qas, dataset):
+    '''
+    Obtain the text of a paragraph given the related question.
+    '''
+    i,j = qas['context_id']
+    return dataset[i]['paragraphs'][j]
+
+def get_context_ids_from_top_indices(paragraphs_set, topn_indices):
+    '''
+    Maps the retrieved paragraph indexes to their `context_id`s so that we can 
+    check whether the question and retrieved paragraphs have the same ID.
+    '''
+    return [topn_parag['context_id'] for topn_parag in np.take(paragraphs_set, topn_indices)]
+
+def top_n_for_question_neural(tok_q, paragraphs_encodings, model, n=100):
+    '''
+    Returns the top n paragraphs in a set of encoded paragraphs given a tokenized question
+    and a model that can deal with it.
+    '''
+    sample_q_repr = model(tok_q)[:,0,:].numpy()
+    scores = np.dot(sample_q_repr, paragraphs_encodings.T)
+    topn_indices = np.argsort(scores, axis=1)[0, -n:]
+    return topn_indices
+
+def top_n_for_question_tfidf(vectorizer, query, docs, n=100):
+    '''
+    Returns the top n paragraphs in a set of paragraphs encoded through a vectorizer (docs) 
+    given a question and a vectorizer that can deal with it.
+    '''
+    q = query['qas']['question']
+    q = vectorizer.transform([q])
+    scores = np.asarray(np.dot(docs, q.T).todense()).flatten()
+    sorted_scores = np.argsort(scores) # Negated scores for descending order
+    return sorted_scores[-n:]
