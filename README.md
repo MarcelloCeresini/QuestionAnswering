@@ -39,4 +39,5 @@ Then, the model can be evaluated on a test dataset using `python3 compute_answer
     - [error_analysis.ipynb](src/error_analysis.ipynb) contains an analysis of the mistakes that the model makes with respect to the ground truth
     - [train.ipynb](src/train.ipynb) is a notebook containing all of the training experiments we conducted
     - [evaluation_tests.ipynb](src/evaluation_tests.ipynb) contains the evaluations whose results we presented in the report
-- Finally, [report.pdf](report.pdf) contains the report for the project.
+- [report_final_project.pdf](report_final_project.pdf) contains the report for the final project (Question Answering with DistilBert).
+- [report_project_work.pdf](report_project_work.pdf) contains the report for the project work (Open Domain QA with Sparse and Dense Representations).
