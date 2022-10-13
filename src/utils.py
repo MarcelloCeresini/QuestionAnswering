@@ -631,7 +631,7 @@ class ReducedDistilBertModel(keras.Model):
         return self.reduction_layer(hidden_state) if self.dimensionality != 768 else hidden_state
 
 
-class DenseEncoder(layers.Layer):
+class DenseEncoder(keras.layers.Layer):
     def __init__(self, model_q, model_p):
         super().__init__()
         self.model_q = model_q  # Dense encoder for questions
